@@ -25,7 +25,6 @@ export function AuthProvider({ children }) {
           if (error) throw error;
           
           if (userProfile?.role === 'super_admin') {
-            // Security: Super admins should not be in the client portal.
             supabase.auth.signOut();
             setProfile(null);
           } else {
@@ -69,7 +68,7 @@ export function AuthProvider({ children }) {
     loading,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={value}>{!loading && children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
