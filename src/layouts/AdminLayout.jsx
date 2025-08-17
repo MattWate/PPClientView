@@ -7,7 +7,7 @@ import SitesPage from '../pages/Sites';
 import StaffPage from '../pages/Staff';
 import TasksPage from '../pages/Tasks';
 
-export default function AdminLayout({ user, profile }) {
+export default function AdminLayout({ session, profile }) {
   const [currentPage, setCurrentPage] = useState('dashboard');
 
   const renderPage = () => {
@@ -26,7 +26,7 @@ export default function AdminLayout({ user, profile }) {
 
   return (
     <div className="flex h-screen bg-gray-100">
-      <Sidebar user={user} profile={profile} currentPage={currentPage} setCurrentPage={setCurrentPage} />
+      <Sidebar user={session.user} profile={profile} currentPage={currentPage} setCurrentPage={setCurrentPage} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header title={currentPage} />
         <main className="flex-1 overflow-x-hidden overflow-y-auto p-6">
