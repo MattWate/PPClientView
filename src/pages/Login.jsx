@@ -15,7 +15,7 @@ export default function LoginPage() {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      // The main App component will eventually handle the session update.
+      // The onAuthStateChange listener in our useAuth hook will handle the session update.
     } catch (error) {
       setError(error.message);
     } finally {
