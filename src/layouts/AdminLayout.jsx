@@ -13,14 +13,14 @@ export default function AdminLayout({ session, profile }) {
   const renderPage = () => {
     switch (currentPage) {
       case 'sites':
-        return <SitesPage />;
+        return <SitesPage profile={profile} />;
       case 'staff':
-        return <StaffPage />;
+        return <StaffPage profile={profile} />;
       case 'tasks':
-        return <TasksPage />;
+        return <TasksPage profile={profile} />;
       case 'dashboard':
       default:
-        return <DashboardPage />;
+        return <DashboardPage profile={profile} />;
     }
   };
 
