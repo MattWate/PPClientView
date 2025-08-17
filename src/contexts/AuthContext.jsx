@@ -10,43 +10,61 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // onAuthStateChange fires once upon initial load, and again whenever the auth state changes.
-    // This is the single source of truth for the user's session.
+    // Stage 1: Perform an initial check to see if a session already exists.
+    const getInitialSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const { data: userProfile, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+          
+          if (error) throw error;
+
+          if (userProfile?.role === 'super_admin') {
+            await supabase.auth.signOut();
+          } else {
+            setSession(session);
+            setProfile(userProfile);
+          }
+        }
+      } catch (error) {
+        console.error("Initial session fetch error:", error);
+      } finally {
+        // This is crucial: always set loading to false after the initial check is complete.
+        setLoading(false);
+      }
+    };
+
+    getInitialSession();
+
+    // Stage 2: Set up a listener for any subsequent changes in auth state.
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
-        try {
-          setSession(session);
-          if (session) {
-            // If a session exists, fetch the user's profile.
-            const { data: userProfile, error } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', session.user.id)
-              .single();
-            
-            if (error) throw error;
-            
-            // Security check: If the user is a super_admin, sign them out of the client portal.
-            if (userProfile?.role === 'super_admin') {
-              await supabase.auth.signOut();
-              setProfile(null);
-            } else {
-              setProfile(userProfile);
-            }
-          } else {
+        if (session) {
+          const { data: userProfile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+          
+          if (userProfile?.role === 'super_admin') {
+            await supabase.auth.signOut();
+            setSession(null);
             setProfile(null);
+          } else {
+            setSession(session);
+            setProfile(userProfile);
           }
-        } catch (error) {
-          console.error('Error in auth listener:', error);
+        } else {
+          setSession(null);
           setProfile(null);
-        } finally {
-          // This is crucial: set loading to false after the auth state has been determined.
-          setLoading(false);
         }
       }
     );
 
-    // Clean up the listener when the component unmounts.
     return () => {
       authListener.subscription.unsubscribe();
     };
