@@ -11,13 +11,7 @@ export default function SitesPage({ profile }) {
   const [selectedSiteId, setSelectedSiteId] = useState(null);
 
   useEffect(() => {
-    // This function will only run if a valid profile with a company_id exists.
     const fetchSitesAndZones = async () => {
-      if (!profile?.company_id) {
-        setLoading(false);
-        return;
-      }
-
       try {
         setLoading(true);
         const { data: sitesData, error: sitesError } = await supabase
@@ -33,9 +27,9 @@ export default function SitesPage({ profile }) {
         setLoading(false);
       }
     };
-
+    
     fetchSitesAndZones();
-  }, [profile]); // Depend on the entire profile object to re-run when it loads.
+  }, [profile.company_id]);
 
   const handleCreateSite = async (e) => {
     e.preventDefault();
