@@ -25,8 +25,9 @@ export function AuthProvider({ children }) {
           if (error) throw error;
           
           if (userProfile?.role === 'super_admin') {
-            supabase.auth.signOut();
+            await supabase.auth.signOut();
             setProfile(null);
+            setSession(null);
           } else {
             setProfile(userProfile);
           }
@@ -34,6 +35,7 @@ export function AuthProvider({ children }) {
       } catch (error) {
         console.error('Error fetching initial user profile:', error);
         setProfile(null);
+        setSession(null);
       } finally {
         setLoading(false);
       }
@@ -68,7 +70,8 @@ export function AuthProvider({ children }) {
     loading,
   };
 
-  return <AuthContext.Provider value={value}>{!loading && children}</AuthContext.Provider>;
+  // This now always renders the children, allowing App.jsx to handle the loading state.
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
