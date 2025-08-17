@@ -21,11 +21,11 @@ export default function App() {
   // Render the correct layout based on the user's role from their profile.
   switch (profile.role) {
     case 'admin':
-      return <AdminLayout />;
+      return <AdminLayout session={session} profile={profile} />;
     // case 'supervisor':
-    //   return <SupervisorLayout />;
+    //   return <SupervisorLayout session={session} profile={profile} />;
     // case 'cleaner':
-    //   return <CleanerLayout />;
+    //   return <CleanerLayout session={session} profile={profile} />;
     default:
       // If the user has an unknown role, show the login page.
       return <LoginPage />;
