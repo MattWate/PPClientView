@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './contexts/AuthContext';
 import { supabase } from './services/supabaseClient';
-import LoginPage from './pages/Login.jsx';
+import PublicHomePage from './pages/PublicHomePage';
 import AdminLayout from './layouts/AdminLayout.jsx';
 // Placeholders for other layouts
 // import SupervisorLayout from './layouts/SupervisorLayout.jsx';
@@ -12,6 +12,7 @@ export default function App() {
   const { session, loading: authLoading } = useAuth();
   const [profile, setProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
+  const [view, setView] = useState('landing'); // 'landing' or 'dashboard'
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -39,29 +40,40 @@ export default function App() {
         }
       } else {
         setProfile(null);
+        setView('landing'); // If user logs out, return to landing page
       }
     };
 
     fetchProfile();
   }, [session]);
 
-  if (authLoading || profileLoading) {
-    return <div className="flex items-center justify-center h-screen"><p>Loading...</p></div>;
+  const renderDashboard = () => {
+    if (authLoading || profileLoading) {
+      return <div className="flex items-center justify-center h-screen"><p>Loading Dashboard...</p></div>;
+    }
+
+    if (!session || !profile) {
+        setView('landing'); // Should not happen, but as a fallback
+        return null;
+    }
+
+    switch (profile.role) {
+      case 'admin':
+        return <AdminLayout session={session} profile={profile} />;
+      // case 'supervisor':
+      //   return <SupervisorLayout session={session} profile={profile} />;
+      // case 'cleaner':
+      //   return <CleanerLayout session={session} profile={profile} />;
+      default:
+        // If user has an unknown role, send them back to landing
+        setView('landing');
+        return null;
+    }
+  };
+
+  if (view === 'landing') {
+    return <PublicHomePage onGoToDashboard={() => setView('dashboard')} />;
   }
 
-  if (!session || !profile) {
-    return <LoginPage />;
-  }
-
-  // Render the correct layout based on the user's role from their profile.
-  switch (profile.role) {
-    case 'admin':
-      return <AdminLayout session={session} profile={profile} />;
-    // case 'supervisor':
-    //   return <SupervisorLayout session={session} profile={profile} />;
-    // case 'cleaner':
-    //   return <CleanerLayout session={session} profile={profile} />;
-    default:
-      return <LoginPage />;
-  }
+  return renderDashboard();
 }
