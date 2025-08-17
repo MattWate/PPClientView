@@ -1,21 +1,38 @@
 // src/layouts/AdminLayout.jsx
-import React from 'react';
-import { supabase } from '../services/supabaseClient';
+import React, { useState } from 'react';
+import Sidebar from '../components/common/Sidebar';
+import Header from '../components/common/Header';
+import DashboardPage from '../pages/Dashboard';
+import SitesPage from '../pages/Sites';
+import StaffPage from '../pages/Staff';
+import TasksPage from '../pages/Tasks';
 
-export default function AdminLayout({ user }) {
+export default function AdminLayout({ user, profile }) {
+  const [currentPage, setCurrentPage] = useState('dashboard');
+
+  const renderPage = () => {
+    switch (currentPage) {
+      case 'sites':
+        return <SitesPage />;
+      case 'staff':
+        return <StaffPage />;
+      case 'tasks':
+        return <TasksPage />;
+      case 'dashboard':
+      default:
+        return <DashboardPage />;
+    }
+  };
+
   return (
     <div className="flex h-screen bg-gray-100">
-      <aside className="w-64 bg-gray-800 text-white p-4">
-        <h1 className="text-2xl font-bold mb-4">Admin Portal</h1>
-        <p>Welcome, {user.email}</p>
-        <button onClick={() => supabase.auth.signOut()} className="w-full mt-4 text-left text-red-400 hover:text-red-300">
-          Log Out
-        </button>
-      </aside>
-      <main className="flex-1 p-8">
-        <h2 className="text-3xl font-bold">Admin Dashboard</h2>
-        <p>Admin-specific content goes here.</p>
-      </main>
+      <Sidebar user={user} profile={profile} currentPage={currentPage} setCurrentPage={setCurrentPage} />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header title={currentPage} />
+        <main className="flex-1 overflow-x-hidden overflow-y-auto p-6">
+          {renderPage()}
+        </main>
+      </div>
     </div>
   );
 }
