@@ -1,6 +1,5 @@
 // src/App.jsx
-import React, { useEffect } from 'react';
-import { useAuth } from './hooks/useAuth';
+import React, { useState, useEffect } from 'react';
 import { supabase } from './services/supabaseClient';
 import LoginPage from './pages/Login.jsx';
 import AdminLayout from './layouts/AdminLayout.jsx';
@@ -8,29 +7,56 @@ import SupervisorLayout from './layouts/SupervisorLayout.jsx';
 import CleanerLayout from './layouts/CleanerLayout.jsx';
 
 export default function App() {
-  const { session, profile, loading } = useAuth();
+  const [session, setSession] = useState(null);
+  const [profile, setProfile] = useState(null);
 
+  // This effect will run once when the app starts to check for an existing session.
   useEffect(() => {
-    // This effect runs when the profile is loaded.
-    // If the user is a super_admin, they should not be in the client portal.
-    // We log them out automatically.
-    if (profile?.role === 'super_admin') {
-      supabase.auth.signOut();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        fetchProfile(session);
+      }
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (session) {
+          fetchProfile(session);
+        } else {
+          setSession(null);
+          setProfile(null);
+        }
+      }
+    );
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  const fetchProfile = async (session) => {
+    const { data: userProfile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', session.user.id)
+      .single();
+    
+    // This is the security check. If the user is a super_admin, log them out.
+    if (userProfile?.role === 'super_admin') {
+        supabase.auth.signOut();
+    } else {
+        setProfile(userProfile);
+        setSession(session);
     }
-  }, [profile]);
+  };
 
-
-  if (loading) {
-    return <div className="flex items-center justify-center h-screen"><p>Loading...</p></div>;
+  // If there is no valid session or profile, show the login page.
+  if (!session || !profile) {
+    return <LoginPage onLoginSuccess={fetchProfile} />;
   }
 
-  if (!session || profile?.role === 'super_admin') {
-    // Show login page if there's no session OR if the user is a super_admin.
-    return <LoginPage />;
-  }
-
-  // Render the correct layout based on the user's role from their profile.
-  switch (profile?.role) {
+  // Otherwise, render the correct layout based on the user's role.
+  switch (profile.role) {
     case 'admin':
       return <AdminLayout user={session.user} />;
     case 'supervisor':
@@ -38,7 +64,6 @@ export default function App() {
     case 'cleaner':
       return <CleanerLayout user={session.user} />;
     default:
-      // If the profile is still loading or has an unknown role, show a loading screen.
-      return <div className="flex items-center justify-center h-screen"><p>Loading user profile...</p></div>;
+      return <LoginPage onLoginSuccess={fetchProfile} />;
   }
 }
