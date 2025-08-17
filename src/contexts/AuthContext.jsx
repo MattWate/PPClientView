@@ -10,14 +10,12 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Stage 1: Perform an initial check to see if a session already exists.
     const getInitialSession = async () => {
-      console.log("🔄 Checking for existing session...");
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        console.log("🟢 Session:", session);
 
         if (session) {
-          console.log("🔍 Fetching profile for:", session.user.id);
           const { data: userProfile, error } = await supabase
             .from('profiles')
             .select('*')
@@ -26,10 +24,7 @@ export function AuthProvider({ children }) {
 
           if (error) throw error;
 
-          console.log("🟢 Profile:", userProfile);
-
           if (userProfile?.role === 'super_admin') {
-            console.warn("🚫 Super admin detected, logging out...");
             await supabase.auth.signOut();
             setSession(null);
             setProfile(null);
@@ -38,33 +33,31 @@ export function AuthProvider({ children }) {
             setProfile(userProfile);
           }
         } else {
-          console.log("🟡 No session found");
+          // This is the crucial fix: ensure state is cleared if no session exists.
           setSession(null);
           setProfile(null);
         }
       } catch (error) {
-        console.error("❌ Initial session fetch error:", error);
+        console.error("Initial session fetch error:", error);
         setSession(null);
         setProfile(null);
       } finally {
-        console.log("✅ Auth state loading complete");
         setLoading(false);
       }
     };
 
     getInitialSession();
 
+    // Stage 2: Set up a listener for any subsequent changes in auth state.
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
-        console.log("⚡ Auth state changed:", _event, session);
-
         if (session) {
           const { data: userProfile } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', session.user.id)
             .single();
-
+          
           if (userProfile?.role === 'super_admin') {
             await supabase.auth.signOut();
             setSession(null);
@@ -80,16 +73,19 @@ export function AuthProvider({ children }) {
       }
     );
 
+    // Clean up the listener when the component unmounts.
     return () => {
-      authListener?.unsubscribe?.(); // ✅ modern safe cleanup
+      authListener?.subscription?.unsubscribe();
     };
   }, []);
 
-  return (
-    <AuthContext.Provider value={{ session, profile, loading }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  const value = {
+    session,
+    profile,
+    loading,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
