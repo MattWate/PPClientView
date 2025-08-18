@@ -18,7 +18,9 @@ export default function AdminLayout({ session, profile }) {
       if (validPages.includes(hash)) {
         setCurrentPage(hash);
       } else {
+        // If the hash is invalid or empty, default to dashboard
         setCurrentPage('dashboard');
+        window.location.hash = '/dashboard';
       }
     };
 
@@ -49,7 +51,7 @@ export default function AdminLayout({ session, profile }) {
 
   return (
     <div className="flex h-screen bg-gray-100">
-      <Sidebar user={session.user} profile={profile} currentPage={currentPage} setCurrentPage={setCurrentPage} />
+      <Sidebar user={session.user} profile={profile} currentPage={currentPage} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header title={currentPage} />
         <main className="flex-1 overflow-x-hidden overflow-y-auto p-6">
