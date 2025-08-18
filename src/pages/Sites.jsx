@@ -36,17 +36,70 @@ export default function SitesPage({ profile }) {
     fetchFullHierarchy();
   }, [profile]);
 
-  const handleCreate = async (type, name) => {
-    let result;
-    if (type === 'site') {
-      result = await supabase.from('sites').insert({ name, company_id: profile.company_id }).select().single();
-    } else if (type === 'zone') {
-      result = await supabase.from('zones').insert({ name, site_id: activeSiteId }).select().single();
-    } else if (type === 'area') {
-      result = await supabase.from('areas').insert({ name, zone_id: activeZoneId }).select().single();
+  const handleCreateSite = async (e) => {
+    e.preventDefault();
+    try {
+      const { data: newSite, error } = await supabase
+        .from('sites')
+        .insert({ name: newSiteName, company_id: profile.company_id })
+        .select('*, zones(*, areas(*))')
+        .single();
+      
+      if (error) throw error;
+      setSites([...sites, newSite]);
+      setNewSiteName('');
+    } catch (error) {
+      setError(error.message);
     }
-    if (result.error) setError(result.error.message);
-    else fetchFullHierarchy(); // Refresh data
+  };
+
+  const handleCreateZone = async (e) => {
+    e.preventDefault();
+    try {
+      const { data: newZone, error } = await supabase
+        .from('zones')
+        .insert({ name: newZoneName, site_id: activeSiteId })
+        .select('*, areas(*)')
+        .single();
+
+      if (error) throw error;
+
+      setSites(sites.map(site => 
+        site.id === activeSiteId 
+          ? { ...site, zones: [...site.zones, newZone] } 
+          : site
+      ));
+      setNewZoneName('');
+      setActiveSiteId(null);
+    } catch (error) {
+      setError(error.message);
+    }
+  };
+
+  const handleCreateArea = async (e) => {
+    e.preventDefault();
+    try {
+      const { data: newArea, error } = await supabase
+        .from('areas')
+        .insert({ name: newAreaName, zone_id: activeZoneId })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setSites(sites.map(site => ({
+        ...site,
+        zones: site.zones.map(zone => 
+          zone.id === activeZoneId 
+            ? { ...zone, areas: [...zone.areas, newArea] } 
+            : zone
+        )
+      })));
+      setNewAreaName('');
+      setActiveZoneId(null);
+    } catch (error) {
+      setError(error.message);
+    }
   };
   
   const handleDelete = async (type, id) => {
@@ -69,7 +122,7 @@ export default function SitesPage({ profile }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-md">
-        <h3 className="text-xl font-semibold text-gray-800 mb-4">Site & Zone Management</h3>
+        <h3 className="text-xl font-semibold text-gray-800 mb-4">Sites, Zones & Areas</h3>
         <div className="space-y-4">
           {sites.map(site => (
             <div key={site.id} className="border rounded-lg">
@@ -112,7 +165,7 @@ export default function SitesPage({ profile }) {
       <div>
         <div className="bg-white p-6 rounded-lg shadow-md mb-6">
           <h3 className="text-xl font-semibold text-gray-800 mb-4">Create New Site</h3>
-          <form onSubmit={(e) => { handleCreateSite(e, 'site', newSiteName); setNewSiteName(''); }} className="space-y-4">
+          <form onSubmit={handleCreateSite} className="space-y-4">
             <div>
               <label className="text-sm font-medium text-gray-700">Site Name</label>
               <input type="text" value={newSiteName} onChange={e => setNewSiteName(e.target.value)} required className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm" />
@@ -123,7 +176,7 @@ export default function SitesPage({ profile }) {
         {activeSiteId && !activeZoneId && (
           <div className="bg-white p-6 rounded-lg shadow-md">
             <h3 className="text-xl font-semibold text-gray-800 mb-4">Add Zone to {sites.find(s => s.id === activeSiteId)?.name}</h3>
-            <form onSubmit={(e) => { handleCreate(e, 'zone', newZoneName); setNewZoneName(''); setActiveSiteId(null); }} className="space-y-4">
+            <form onSubmit={handleCreateZone} className="space-y-4">
               <div>
                 <label className="text-sm font-medium text-gray-700">Zone Name</label>
                 <input type="text" value={newZoneName} onChange={e => setNewZoneName(e.target.value)} required className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm" />
@@ -136,7 +189,7 @@ export default function SitesPage({ profile }) {
         {activeZoneId && (
           <div className="bg-white p-6 rounded-lg shadow-md">
             <h3 className="text-xl font-semibold text-gray-800 mb-4">Add Area to Zone</h3>
-            <form onSubmit={(e) => { handleCreate(e, 'area', newAreaName); setNewAreaName(''); setActiveZoneId(null); setActiveSiteId(null); }} className="space-y-4">
+            <form onSubmit={handleCreateArea} className="space-y-4">
               <div>
                 <label className="text-sm font-medium text-gray-700">Area Name</label>
                 <input type="text" value={newAreaName} onChange={e => setNewAreaName(e.target.value)} required className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm" />
