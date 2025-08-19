@@ -13,7 +13,8 @@ export default function TasksPage({ profile }) {
   const [newAreaTypeName, setNewAreaTypeName] = useState('');
   const [selectedAreaType, setSelectedAreaType] = useState(null);
   const [newJobDescription, setNewJobDescription] = useState('');
-  const [newScheduledJob, setNewScheduledJob] = useState({ title: '', area_id: '', cron_schedule: '' });
+  const [newScheduledJob, setNewScheduledJob] = useState({ title: '', area_id: '' });
+  const [schedule, setSchedule] = useState({ type: 'daily', time: '08:00', days: [] });
   
   const fetchPageData = async () => {
     if (!profile) return;
@@ -81,15 +82,37 @@ export default function TasksPage({ profile }) {
 
   const handleCreateScheduledJob = async (e) => {
     e.preventDefault();
+    // Logic to convert the user-friendly schedule to a cron string
+    const [hour, minute] = schedule.time.split(':');
+    let cron_schedule = `${minute} ${hour} * * `;
+    if (schedule.type === 'daily') {
+      cron_schedule += '*';
+    } else {
+      if (schedule.days.length === 0) {
+        setError("Please select at least one day for weekly schedules.");
+        return;
+      }
+      cron_schedule += schedule.days.sort().join(',');
+    }
+    setError(null);
+
     const { data, error } = await supabase
       .from('scheduled_jobs')
-      .insert({ ...newScheduledJob, company_id: profile.company_id });
+      .insert({ ...newScheduledJob, company_id: profile.company_id, cron_schedule });
     
     if (error) setError(error.message);
     else {
       fetchPageData(); // Refresh all data
-      setNewScheduledJob({ title: '', area_id: '', cron_schedule: '' });
+      setNewScheduledJob({ title: '', area_id: '' });
+      setSchedule({ type: 'daily', time: '08:00', days: [] });
     }
+  };
+
+  const handleDayToggle = (day) => {
+    setSchedule(prev => ({
+      ...prev,
+      days: prev.days.includes(day) ? prev.days.filter(d => d !== day) : [...prev.days, day]
+    }));
   };
 
   if (loading) return <p>Loading templates & schedules...</p>;
@@ -186,9 +209,25 @@ export default function TasksPage({ profile }) {
               </select>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700">Cron Schedule</label>
-              <input type="text" value={newScheduledJob.cron_schedule} onChange={e => setNewScheduledJob({...newScheduledJob, cron_schedule: e.target.value})} required placeholder="e.g., 0 8 * * 1-5" className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm font-mono" />
-              <p className="text-xs text-gray-500 mt-1">e.g., "0 8 * * 1-5" for 8am on weekdays.</p>
+              <label className="text-sm font-medium text-gray-700">Frequency</label>
+              <select value={schedule.type} onChange={e => setSchedule({...schedule, type: e.target.value, days: []})} className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm">
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+              </select>
+            </div>
+            {schedule.type === 'weekly' && (
+              <div>
+                <label className="text-sm font-medium text-gray-700">Days of the Week</label>
+                <div className="flex space-x-1 mt-1">
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, index) => (
+                    <button type="button" key={day} onClick={() => handleDayToggle(index)} className={`w-full px-2 py-1 rounded-md text-sm ${schedule.days.includes(index) ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>{day}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div>
+              <label className="text-sm font-medium text-gray-700">Time</label>
+              <input type="time" value={schedule.time} onChange={e => setSchedule({...schedule, time: e.target.value})} required className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm" />
             </div>
             <button type="submit" className="w-full py-2 px-4 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700">Schedule Job</button>
           </form>
