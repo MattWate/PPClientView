@@ -4,12 +4,14 @@ import { supabase } from '../services/supabaseClient';
 
 export default function SitesPage({ profile }) {
   const [sites, setSites] = useState([]);
+  const [areaTypes, setAreaTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
   const [newSiteName, setNewSiteName] = useState('');
   const [newZoneName, setNewZoneName] = useState('');
   const [newAreaName, setNewAreaName] = useState('');
+  const [selectedAreaTypeId, setSelectedAreaTypeId] = useState('');
 
   const [activeSiteId, setActiveSiteId] = useState(null);
   const [activeZoneId, setActiveZoneId] = useState(null);
@@ -20,11 +22,20 @@ export default function SitesPage({ profile }) {
       setLoading(true);
       const { data, error } = await supabase
         .from('sites')
-        .select('*, zones(*, areas(*))')
+        .select('*, zones(*, areas(*, area_types(name)))')
         .eq('company_id', profile.company_id);
 
       if (error) throw error;
       setSites(data);
+
+      const { data: typesData, error: typesError } = await supabase
+        .from('area_types')
+        .select('*')
+        .eq('company_id', profile.company_id);
+
+      if (typesError) throw typesError;
+      setAreaTypes(typesData);
+
     } catch (error) {
       setError(error.message);
     } finally {
@@ -46,8 +57,9 @@ export default function SitesPage({ profile }) {
       result = await supabase.from('zones').insert({ name: newZoneName, site_id: activeSiteId, company_id: profile.company_id });
       setNewZoneName('');
     } else if (type === 'area') {
-      result = await supabase.from('areas').insert({ name: newAreaName, zone_id: activeZoneId, company_id: profile.company_id });
+      result = await supabase.from('areas').insert({ name: newAreaName, zone_id: activeZoneId, company_id: profile.company_id, area_type_id: selectedAreaTypeId || null });
       setNewAreaName('');
+      setSelectedAreaTypeId('');
     }
     
     if (result.error) {
@@ -55,22 +67,19 @@ export default function SitesPage({ profile }) {
     } else {
       setActiveSiteId(null);
       setActiveZoneId(null);
-      fetchFullHierarchy(); // Refresh data after any successful creation
+      fetchFullHierarchy();
     }
   };
   
   const handleDelete = async (type, id) => {
     if (!window.confirm(`Are you sure you want to delete this ${type}? This action cannot be undone.`)) return;
     let result;
-    if (type === 'site') {
-      result = await supabase.from('sites').delete().eq('id', id);
-    } else if (type === 'zone') {
-      result = await supabase.from('zones').delete().eq('id', id);
-    } else if (type === 'area') {
-      result = await supabase.from('areas').delete().eq('id', id);
-    }
+    if (type === 'site') result = await supabase.from('sites').delete().eq('id', id);
+    else if (type === 'zone') result = await supabase.from('zones').delete().eq('id', id);
+    else if (type === 'area') result = await supabase.from('areas').delete().eq('id', id);
+    
     if (result.error) setError(result.error.message);
-    else fetchFullHierarchy(); // Refresh data
+    else fetchFullHierarchy();
   };
 
   if (loading) return <p>Loading sites...</p>;
@@ -105,7 +114,10 @@ export default function SitesPage({ profile }) {
                             <ul className="space-y-1">
                                 {zone.areas.map(area => (
                                     <li key={area.id} className="flex justify-between items-center text-sm p-1">
-                                        <span>{area.name}</span>
+                                        <div>
+                                            <span>{area.name}</span>
+                                            {area.area_types && <span className="ml-2 text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">{area.area_types.name}</span>}
+                                        </div>
                                         <button onClick={() => handleDelete('area', area.id)} className="text-xs text-red-500 hover:text-red-700">Delete</button>
                                     </li>
                                 ))}
@@ -150,6 +162,15 @@ export default function SitesPage({ profile }) {
               <div>
                 <label className="text-sm font-medium text-gray-700">Area Name</label>
                 <input type="text" value={newAreaName} onChange={e => setNewAreaName(e.target.value)} required className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm" />
+              </div>
+               <div>
+                <label className="text-sm font-medium text-gray-700">Area Type (Optional)</label>
+                <select value={selectedAreaTypeId} onChange={e => setSelectedAreaTypeId(e.target.value)} className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm">
+                  <option value="">None</option>
+                  {areaTypes.map(type => (
+                    <option key={type.id} value={type.id}>{type.name}</option>
+                  ))}
+                </select>
               </div>
               <button type="submit" className="w-full py-2 px-4 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700">Add Area</button>
               <button type="button" onClick={() => { setActiveZoneId(null); setActiveSiteId(null); }} className="w-full py-2 px-4 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 mt-2">Cancel</button>
