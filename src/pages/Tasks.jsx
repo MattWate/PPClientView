@@ -96,15 +96,44 @@ export default function TasksPage({ profile }) {
   if (error) return <p className="text-red-600">Error: {error}</p>;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Area Types and Job Templates Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-md">
-          {/* ... existing area types code ... */}
+          <h3 className="text-xl font-semibold text-gray-800 mb-4">Area Types & Job Templates</h3>
+          <div className="space-y-4">
+            {areaTypes.map(type => (
+              <div key={type.id} className="border rounded-lg p-4 cursor-pointer hover:bg-gray-50" onClick={() => setSelectedAreaType(type)}>
+                <h4 className="font-semibold text-lg text-gray-700">{type.name}</h4>
+                <p className="text-sm text-gray-500">{type.job_templates.length} standard jobs</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Create New Area Type</h3>
+            <form onSubmit={handleCreateAreaType} className="flex items-center space-x-2">
+              <input type="text" value={newAreaTypeName} onChange={e => setNewAreaTypeName(e.target.value)} required placeholder="e.g., Standard Office" className="flex-grow px-3 py-2 border border-gray-300 rounded-md shadow-sm" />
+              <button type="submit" className="py-2 px-4 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700">Create</button>
+            </form>
+          </div>
         </div>
-        <div>
-          {/* ... existing create area type and job template forms ... */}
-        </div>
+        {selectedAreaType && (
+          <div className="bg-white p-6 rounded-lg shadow-md">
+            <h3 className="text-xl font-semibold text-gray-800 mb-4">Jobs for "{selectedAreaType.name}"</h3>
+            <ul className="space-y-2 mb-6">
+              {selectedAreaType.job_templates.map(job => (
+                <li key={job.id} className="p-2 rounded-md bg-gray-100">{job.description}</li>
+              ))}
+            </ul>
+            <form onSubmit={handleCreateJobTemplate} className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700">New Job Description</label>
+                <input type="text" value={newJobDescription} onChange={e => setNewJobDescription(e.target.value)} required className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm" />
+              </div>
+              <button type="submit" className="w-full py-2 px-4 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Add Job</button>
+            </form>
+          </div>
+        )}
       </div>
 
       {/* Scheduled Jobs Section */}
@@ -124,7 +153,7 @@ export default function TasksPage({ profile }) {
                 {scheduledJobs.map(job => (
                   <tr key={job.id} className="border-b hover:bg-gray-50">
                     <td className="py-3 px-4 font-medium">{job.title}</td>
-                    <td className="py-3 px-4 text-sm text-gray-600">{job.areas.sites.name} > {job.areas.zones.name} > {job.areas.name}</td>
+                    <td className="py-3 px-4 text-sm text-gray-600">{job.areas?.sites?.name} > {job.areas?.zones?.name} > {job.areas?.name}</td>
                     <td className="py-3 px-4 font-mono text-sm">{job.cron_schedule}</td>
                   </tr>
                 ))}
