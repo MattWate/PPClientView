@@ -2,7 +2,7 @@
 import React from 'react';
 import { supabase } from '../../services/supabaseClient';
 
-export default function Sidebar({ user, profile, currentPage, setCurrentPage }) {
+export default function Sidebar({ user, profile, currentPage }) {
   const navItems = {
     admin: [
       { name: 'Dashboard', icon: 'fa-tachometer-alt', page: 'dashboard' },
@@ -32,11 +32,6 @@ export default function Sidebar({ user, profile, currentPage, setCurrentPage }) 
           <a
             key={item.name}
             href={`#/${item.page}`}
-            onClick={(e) => {
-                e.preventDefault();
-                setCurrentPage(item.page);
-                window.location.hash = `/${item.page}`;
-            }}
             className={`flex items-center px-4 py-2.5 text-sm font-medium rounded-md ${currentPage === item.page ? 'bg-gray-700' : 'hover:bg-gray-700'}`}
           >
             <i className={`fas ${item.icon} w-6 text-center mr-3`}></i> {item.name}
