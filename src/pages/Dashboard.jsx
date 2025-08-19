@@ -30,15 +30,37 @@ export default function DashboardPage({ profile }) {
           compliance: compliance.data ? (compliance.data * 100).toFixed(1) : 0
         });
 
-        // Fetch recent activity
-        const { data: activityData, error: activityError } = await supabase
+        // Fetch recent activity tasks
+        const { data: tasksData, error: tasksError } = await supabase
             .from('tasks')
-            .select('*, profiles:completed_by(full_name), areas(name, zones(name, sites(name)))')
+            .select('*, areas(name, zones(name, sites(name)))')
             .eq('company_id', profile.company_id)
             .order('created_at', { ascending: false })
             .limit(5);
-        if (activityError) throw activityError;
-        setRecentActivity(activityData);
+        if (tasksError) throw tasksError;
+
+        // Fetch profiles for the recent activity
+        const userIds = tasksData.map(task => task.completed_by).filter(Boolean);
+        if (userIds.length > 0) {
+            const { data: profilesData, error: profilesError } = await supabase
+                .from('profiles')
+                .select('id, full_name')
+                .in('id', userIds);
+            if (profilesError) throw profilesError;
+
+            const profileMap = profilesData.reduce((acc, profile) => {
+                acc[profile.id] = profile;
+                return acc;
+            }, {});
+
+            const combinedActivity = tasksData.map(task => ({
+                ...task,
+                profiles: profileMap[task.completed_by]
+            }));
+            setRecentActivity(combinedActivity);
+        } else {
+            setRecentActivity(tasksData);
+        }
 
         // Fetch open issues
         const { data: issuesData, error: issuesError } = await supabase
@@ -89,7 +111,7 @@ export default function DashboardPage({ profile }) {
                     {task.profiles?.full_name || 'System'} completed "{task.title}"
                   </p>
                   <p className="text-xs text-gray-500">
-                    {task.areas.sites.name} > {task.areas.zones.name} > {task.areas.name}
+                    {task.areas?.sites?.name} > {task.areas?.zones?.name} > {task.areas?.name}
                   </p>
                 </div>
               </li>
@@ -102,7 +124,7 @@ export default function DashboardPage({ profile }) {
             {openIssues.map(issue => (
               <li key={issue.id} className="p-3 bg-red-50 rounded-md">
                 <p className="font-semibold text-red-800">{issue.title}</p>
-                <p className="text-xs text-red-600">{issue.areas.sites.name} > {issue.areas.zones.name} > {issue.areas.name}</p>
+                <p className="text-xs text-red-600">{issue.areas?.sites?.name} > {issue.areas?.zones?.name} > {issue.areas?.name}</p>
               </li>
             ))}
           </ul>
