@@ -11,9 +11,62 @@ export default function PublicHomePage({ onGoToDashboard }) {
     return <div className="flex items-center justify-center h-screen"><p>Loading...</p></div>;
   }
 
+  const pricingTiers = [
+    {
+      name: 'Professional',
+      price: 'R2,499',
+      description: 'For SMEs landing their first ISO contracts',
+      features: [
+        'Up to 10 active sites',
+        'Unlimited users (cleaners, supervisors, managers)',
+        'QR code scan logging & supervisor photo verification',
+        'Area checklists & recurring job schedules',
+        'Client staff issue reporting (no login needed)',
+        'Audit-ready PDF reports (12-month retention)',
+        'Email support',
+      ],
+      cta: 'Get Started',
+      onboarding: 'R3,500'
+    },
+    {
+      name: 'Growth',
+      price: 'R4,999',
+      description: 'For growing teams with bigger portfolios',
+      features: [
+        'Up to 30 active sites',
+        'Everything in Professional, plus:',
+        'Multi-site dashboards',
+        'ISO-aligned report packs (9001 / 14001 / 45001)',
+        'SLA breach alerts & escalations',
+        'Client read-only portal',
+        '5-year data retention',
+        'Priority email + chat support',
+      ],
+      cta: 'Upgrade to Growth',
+      onboarding: 'R7,500'
+    },
+    {
+      name: 'Enterprise',
+      price: 'R7,999',
+      description: 'For established providers with national portfolios',
+      features: [
+        'Up to 100 active sites',
+        'Everything in Growth, plus:',
+        'API & webhooks for integrations',
+        'SSO (Google/Microsoft)',
+        'Advanced audit logs & custom reporting',
+        'Power BI connector',
+        'Branded client reports',
+        'Dedicated customer success manager',
+      ],
+      cta: 'Book a Demo',
+      onboarding: 'R15,000+'
+    },
+  ];
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm">
+      <header className="bg-white shadow-sm sticky top-0 z-10">
         <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
           <div className="flex items-center">
             <i className="fas fa-gem text-3xl text-blue-600 mr-3"></i>
@@ -30,43 +83,55 @@ export default function PublicHomePage({ onGoToDashboard }) {
         </div>
       </header>
       
-      <main className="py-12">
-        <div className="max-w-4xl mx-auto px-4 text-center">
-            <h2 className="text-4xl font-extrabold text-gray-900 sm:text-5xl md:text-6xl">
-                The Future of Cleaning Management
-            </h2>
-            <p className="mt-4 max-w-2xl mx-auto text-xl text-gray-500">
-                Streamline operations, ensure compliance, and deliver pristine results with our all-in-one audit and task management platform.
-            </p>
+      <main>
+        <div className="bg-white">
+            <div className="max-w-4xl mx-auto py-16 px-4 text-center">
+                <h2 className="text-4xl font-extrabold text-gray-900 sm:text-5xl md:text-6xl">
+                    The Future of Cleaning Management
+                </h2>
+                <p className="mt-4 max-w-2xl mx-auto text-xl text-gray-500">
+                    Streamline operations, ensure compliance, and deliver pristine results with our all-in-one audit and task management platform.
+                </p>
+            </div>
         </div>
 
-        <div className="mt-12 max-w-7xl mx-auto grid gap-8 lg:grid-cols-3 lg:gap-x-8 px-4">
-            <div className="bg-white p-6 rounded-lg shadow-md">
-                <i className="fas fa-shield-alt text-3xl text-green-500 mb-4"></i>
-                <h3 className="text-lg font-medium text-gray-900">Achieve Compliance</h3>
-                <p className="mt-2 text-base text-gray-500">
-                    Generate ironclad, timestamped audit trails for ISO certification and client reports with a single click.
-                </p>
-            </div>
-            <div className="bg-white p-6 rounded-lg shadow-md">
-                <i className="fas fa-rocket text-3xl text-blue-500 mb-4"></i>
-                <h3 className="text-lg font-medium text-gray-900">Boost Efficiency</h3>
-                <p className="mt-2 text-base text-gray-500">
-                    Replace paper forms and manual data entry with a simple QR-code based system your staff will love.
-                </p>
-            </div>
-            <div className="bg-white p-6 rounded-lg shadow-md">
-                <i className="fas fa-eye text-3xl text-purple-500 mb-4"></i>
-                <h3 className="text-lg font-medium text-gray-900">Real-Time Oversight</h3>
-                <p className="mt-2 text-base text-gray-500">
-                    From your dashboard, manage sites, assign tasks, and track performance across your entire operation in real-time.
-                </p>
+        <div className="py-12 bg-gray-50">
+            <div className="max-w-7xl mx-auto px-4">
+                <div className="text-center mb-12">
+                    <h3 className="text-3xl font-extrabold text-gray-900">PristinePoint Pricing</h3>
+                    <p className="mt-2 text-lg text-gray-500">Built for South African cleaning service providers.</p>
+                    <p className="mt-1 text-lg font-semibold text-blue-600">No per-user surprises. Unlimited cleaners, supervisors, and managers on every plan.</p>
+                </div>
+
+                <div className="grid gap-8 lg:grid-cols-3 lg:gap-x-8">
+                    {pricingTiers.map(tier => (
+                        <div key={tier.name} className="bg-white p-8 rounded-lg shadow-md flex flex-col">
+                            <h4 className="text-2xl font-bold text-gray-900">{tier.name}</h4>
+                            <p className="mt-2 text-gray-500">{tier.description}</p>
+                            <p className="mt-6 text-4xl font-extrabold text-gray-900">{tier.price}<span className="text-base font-medium text-gray-500"> / month</span></p>
+                            <ul className="mt-6 space-y-4 flex-grow">
+                                {tier.features.map(feature => (
+                                    <li key={feature} className="flex items-start">
+                                        <i className="fas fa-check-circle text-green-500 mt-1 mr-3"></i>
+                                        <span className="text-gray-600">{feature}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                            <div className="mt-8">
+                                <a href="#" className="w-full block text-center bg-blue-600 text-white px-6 py-3 rounded-md font-semibold hover:bg-blue-700">{tier.cta}</a>
+                                <p className="text-center text-sm text-gray-500 mt-4">One-time setup fee: <span className="font-bold">{tier.onboarding}</span></p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </div>
         </div>
         
         {!session && (
-            <div id="login" className="mt-12 max-w-md mx-auto px-4">
-                <LoginPage />
+            <div id="login" className="py-12 bg-white">
+                <div className="max-w-md mx-auto px-4">
+                    <LoginPage />
+                </div>
             </div>
         )}
       </main>
