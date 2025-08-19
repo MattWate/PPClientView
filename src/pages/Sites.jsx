@@ -43,10 +43,10 @@ export default function SitesPage({ profile }) {
       result = await supabase.from('sites').insert({ name: newSiteName, company_id: profile.company_id });
       setNewSiteName('');
     } else if (type === 'zone') {
-      result = await supabase.from('zones').insert({ name: newZoneName, site_id: activeSiteId });
+      result = await supabase.from('zones').insert({ name: newZoneName, site_id: activeSiteId, company_id: profile.company_id });
       setNewZoneName('');
     } else if (type === 'area') {
-      result = await supabase.from('areas').insert({ name: newAreaName, zone_id: activeZoneId });
+      result = await supabase.from('areas').insert({ name: newAreaName, zone_id: activeZoneId, company_id: profile.company_id });
       setNewAreaName('');
     }
     
