@@ -2,6 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export default function TasksPage({ profile }) {
   const [areaTypes, setAreaTypes] = useState([]);
   const [scheduledJobs, setScheduledJobs] = useState([]);
@@ -13,7 +16,7 @@ export default function TasksPage({ profile }) {
   const [newAreaTypeName, setNewAreaTypeName] = useState('');
   const [selectedAreaType, setSelectedAreaType] = useState(null);
   const [newJobDescription, setNewJobDescription] = useState('');
-  const [newScheduledJob, setNewScheduledJob] = useState({ title: '', area_id: null });
+  const [newScheduledJob, setNewScheduledJob] = useState({ title: '', area_id: '' }); // <- string UUID
   const [schedule, setSchedule] = useState({ type: 'daily', time: '08:00', days: [] });
 
   const fetchPageData = async () => {
@@ -22,7 +25,6 @@ export default function TasksPage({ profile }) {
       setLoading(true);
       setError(null);
 
-      // Area types (trimmed payload)
       const { data: areaTypesData, error: areaTypesError } = await supabase
         .from('area_types')
         .select('id,name, job_templates(id,description)')
@@ -30,7 +32,6 @@ export default function TasksPage({ profile }) {
       if (areaTypesError) throw areaTypesError;
       setAreaTypes(areaTypesData ?? []);
 
-      // Scheduled jobs with explicit relation path + aliases
       const { data: scheduledJobsData, error: scheduledJobsError } = await supabase
         .from('scheduled_jobs')
         .select(`
@@ -47,7 +48,6 @@ export default function TasksPage({ profile }) {
       if (scheduledJobsError) throw scheduledJobsError;
       setScheduledJobs(scheduledJobsData ?? []);
 
-      // Sites tree (trimmed payload)
       const { data: sitesData, error: sitesError } = await supabase
         .from('sites')
         .select('id,name, zones(id,name, areas(id,name))')
@@ -96,7 +96,6 @@ export default function TasksPage({ profile }) {
 
       await fetchPageData();
 
-      // Re-select the updated area type so right pane refreshes
       setAreaTypes(prev => {
         const updated = prev.find(t => t.id === selectedAreaType.id);
         if (updated) setSelectedAreaType(updated);
@@ -112,7 +111,6 @@ export default function TasksPage({ profile }) {
   const handleCreateScheduledJob = async (e) => {
     e.preventDefault();
     try {
-      // Build cron from friendly schedule
       const [hour, minute] = schedule.time.split(':');
       let cron_schedule = `${minute} ${hour} * * `;
       if (schedule.type === 'daily') {
@@ -125,15 +123,15 @@ export default function TasksPage({ profile }) {
         cron_schedule += [...schedule.days].sort().join(','); // 0=Sun ... 6=Sat
       }
 
-      // Validate area_id (must be a number)
-      if (!Number.isInteger(newScheduledJob.area_id)) {
+      // Validate area_id as a UUID string
+      if (!UUID_RE.test(newScheduledJob.area_id)) {
         setError('Please choose a valid Area before scheduling the job.');
         return;
       }
 
       const payload = {
         title: newScheduledJob.title.trim(),
-        area_id: newScheduledJob.area_id, // already a number
+        area_id: newScheduledJob.area_id, // string UUID
         company_id: profile.company_id,
         cron_schedule,
       };
@@ -142,7 +140,7 @@ export default function TasksPage({ profile }) {
       if (error) throw error;
 
       await fetchPageData();
-      setNewScheduledJob({ title: '', area_id: null });
+      setNewScheduledJob({ title: '', area_id: '' });
       setSchedule({ type: 'daily', time: '08:00', days: [] });
       setError(null);
     } catch (err) {
@@ -283,15 +281,15 @@ export default function TasksPage({ profile }) {
               />
             </div>
 
-            {/* Area select with enforced real choice + numeric state */}
+            {/* Area select: keep UUID strings; enforce real choice */}
             <div>
               <label className="text-sm font-medium text-gray-700">Area</label>
               <select
-                value={Number.isInteger(newScheduledJob.area_id) ? String(newScheduledJob.area_id) : ''}
+                value={newScheduledJob.area_id || ''}
                 onChange={e =>
                   setNewScheduledJob({
                     ...newScheduledJob,
-                    area_id: Number.parseInt(e.target.value, 10),
+                    area_id: e.target.value, // UUID string
                   })
                 }
                 required
