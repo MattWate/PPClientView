@@ -65,7 +65,7 @@ export default function PublicHomePage({ onGoToDashboard }) {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-100">
       <header className="bg-white shadow-sm sticky top-0 z-10">
         <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
           <div className="flex items-center">
@@ -84,18 +84,18 @@ export default function PublicHomePage({ onGoToDashboard }) {
       </header>
       
       <main>
-        <div className="bg-white">
-            <div className="max-w-4xl mx-auto py-16 px-4 text-center">
-                <h2 className="text-4xl font-extrabold text-gray-900 sm:text-5xl md:text-6xl">
+        <div className="bg-gradient-to-br from-blue-600 to-purple-600 text-white">
+            <div className="max-w-4xl mx-auto py-20 px-4 text-center">
+                <h2 className="text-4xl font-extrabold sm:text-5xl md:text-6xl">
                     The Future of Cleaning Management
                 </h2>
-                <p className="mt-4 max-w-2xl mx-auto text-xl text-gray-500">
+                <p className="mt-4 max-w-2xl mx-auto text-xl text-blue-100">
                     Streamline operations, ensure compliance, and deliver pristine results with our all-in-one audit and task management platform.
                 </p>
             </div>
         </div>
 
-        <div className="py-12 bg-gray-50">
+        <div className="py-16 bg-gray-100">
             <div className="max-w-7xl mx-auto px-4">
                 <div className="text-center mb-12">
                     <h3 className="text-3xl font-extrabold text-gray-900">PristinePoint Pricing</h3>
@@ -128,7 +128,7 @@ export default function PublicHomePage({ onGoToDashboard }) {
         </div>
         
         {!session && (
-            <div id="login" className="py-12 bg-white">
+            <div id="login" className="py-16 bg-gray-100">
                 <div className="max-w-md mx-auto px-4">
                     <LoginPage />
                 </div>
