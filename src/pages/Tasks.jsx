@@ -13,7 +13,7 @@ export default function TasksPage({ profile }) {
   const [newAreaTypeName, setNewAreaTypeName] = useState('');
   const [selectedAreaType, setSelectedAreaType] = useState(null);
   const [newJobDescription, setNewJobDescription] = useState('');
-  const [newScheduledJob, setNewScheduledJob] = useState({ title: '', area_id: '' });
+  const [newScheduledJob, setNewScheduledJob] = useState({ title: '', area_id: null });
   const [schedule, setSchedule] = useState({ type: 'daily', time: '08:00', days: [] });
 
   const fetchPageData = async () => {
@@ -112,6 +112,7 @@ export default function TasksPage({ profile }) {
   const handleCreateScheduledJob = async (e) => {
     e.preventDefault();
     try {
+      // Build cron from friendly schedule
       const [hour, minute] = schedule.time.split(':');
       let cron_schedule = `${minute} ${hour} * * `;
       if (schedule.type === 'daily') {
@@ -124,11 +125,15 @@ export default function TasksPage({ profile }) {
         cron_schedule += [...schedule.days].sort().join(','); // 0=Sun ... 6=Sat
       }
 
-      setError(null);
+      // Validate area_id (must be a number)
+      if (!Number.isInteger(newScheduledJob.area_id)) {
+        setError('Please choose a valid Area before scheduling the job.');
+        return;
+      }
 
       const payload = {
-        ...newScheduledJob,
-        area_id: newScheduledJob.area_id ? Number(newScheduledJob.area_id) : null,
+        title: newScheduledJob.title.trim(),
+        area_id: newScheduledJob.area_id, // already a number
         company_id: profile.company_id,
         cron_schedule,
       };
@@ -137,8 +142,9 @@ export default function TasksPage({ profile }) {
       if (error) throw error;
 
       await fetchPageData();
-      setNewScheduledJob({ title: '', area_id: '' });
+      setNewScheduledJob({ title: '', area_id: null });
       setSchedule({ type: 'daily', time: '08:00', days: [] });
+      setError(null);
     } catch (err) {
       setError(err.message);
     }
@@ -150,6 +156,9 @@ export default function TasksPage({ profile }) {
       days: prev.days.includes(day) ? prev.days.filter(d => d !== day) : [...prev.days, day]
     }));
   };
+
+  const areasExist =
+    (sites ?? []).some(s => (s.zones ?? []).some(z => (z.areas ?? []).length > 0));
 
   if (loading) return <p>Loading templates & schedules...</p>;
   if (error) return <p className="text-red-600">Error: {error}</p>;
@@ -274,16 +283,23 @@ export default function TasksPage({ profile }) {
               />
             </div>
 
-            {/* FIXED: single-level optgroup (site). Each option shows Zone — Area. */}
+            {/* Area select with enforced real choice + numeric state */}
             <div>
               <label className="text-sm font-medium text-gray-700">Area</label>
               <select
-                value={newScheduledJob.area_id}
-                onChange={e => setNewScheduledJob({ ...newScheduledJob, area_id: e.target.value })}
+                value={Number.isInteger(newScheduledJob.area_id) ? String(newScheduledJob.area_id) : ''}
+                onChange={e =>
+                  setNewScheduledJob({
+                    ...newScheduledJob,
+                    area_id: Number.parseInt(e.target.value, 10),
+                  })
+                }
                 required
                 className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm"
               >
-                <option value="">Select an Area</option>
+                <option value="" disabled hidden>
+                  Select an Area
+                </option>
                 {(sites ?? []).map(site => (
                   <optgroup key={site.id} label={site.name}>
                     {(site.zones ?? []).flatMap(zone =>
@@ -296,6 +312,11 @@ export default function TasksPage({ profile }) {
                   </optgroup>
                 ))}
               </select>
+              {!areasExist && (
+                <p className="mt-1 text-xs text-amber-700">
+                  No Areas found. Create Zones &amp; Areas under Sites first.
+                </p>
+              )}
             </div>
 
             <div>
