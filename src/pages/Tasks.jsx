@@ -27,7 +27,6 @@ export default function TasksPage({ profile }) {
         .from('area_types')
         .select('id,name, job_templates(id,description)')
         .eq('company_id', profile.company_id);
-
       if (areaTypesError) throw areaTypesError;
       setAreaTypes(areaTypesData ?? []);
 
@@ -45,7 +44,6 @@ export default function TasksPage({ profile }) {
           )
         `)
         .eq('company_id', profile.company_id);
-
       if (scheduledJobsError) throw scheduledJobsError;
       setScheduledJobs(scheduledJobsData ?? []);
 
@@ -54,7 +52,6 @@ export default function TasksPage({ profile }) {
         .from('sites')
         .select('id,name, zones(id,name, areas(id,name))')
         .eq('company_id', profile.company_id);
-
       if (sitesError) throw sitesError;
       setSites(sitesData ?? []);
     } catch (err) {
@@ -78,10 +75,8 @@ export default function TasksPage({ profile }) {
         .insert({ name: newAreaTypeName.trim(), company_id: profile.company_id })
         .select('id,name, job_templates(id,description)')
         .single();
-
       if (error) throw error;
 
-      // Append to list for snappy UX
       setAreaTypes(prev => [...prev, data]);
       setNewAreaTypeName('');
     } catch (err) {
@@ -97,10 +92,9 @@ export default function TasksPage({ profile }) {
       const { error } = await supabase
         .from('job_templates')
         .insert({ description: newJobDescription.trim(), area_type_id: selectedAreaType.id });
-
       if (error) throw error;
 
-      await fetchPageData(); // ensure fresh data
+      await fetchPageData();
 
       // Re-select the updated area type so right pane refreshes
       setAreaTypes(prev => {
@@ -117,9 +111,7 @@ export default function TasksPage({ profile }) {
 
   const handleCreateScheduledJob = async (e) => {
     e.preventDefault();
-
     try {
-      // Build cron from friendly schedule
       const [hour, minute] = schedule.time.split(':');
       let cron_schedule = `${minute} ${hour} * * `;
       if (schedule.type === 'daily') {
@@ -129,8 +121,7 @@ export default function TasksPage({ profile }) {
           setError('Please select at least one day for weekly schedules.');
           return;
         }
-        // Note: 0=Sun ... 6=Sat
-        cron_schedule += [...schedule.days].sort().join(',');
+        cron_schedule += [...schedule.days].sort().join(','); // 0=Sun ... 6=Sat
       }
 
       setError(null);
@@ -146,7 +137,6 @@ export default function TasksPage({ profile }) {
       if (error) throw error;
 
       await fetchPageData();
-
       setNewScheduledJob({ title: '', area_id: '' });
       setSchedule({ type: 'daily', time: '08:00', days: [] });
     } catch (err) {
@@ -284,6 +274,7 @@ export default function TasksPage({ profile }) {
               />
             </div>
 
+            {/* FIXED: single-level optgroup (site). Each option shows Zone — Area. */}
             <div>
               <label className="text-sm font-medium text-gray-700">Area</label>
               <select
@@ -295,13 +286,13 @@ export default function TasksPage({ profile }) {
                 <option value="">Select an Area</option>
                 {(sites ?? []).map(site => (
                   <optgroup key={site.id} label={site.name}>
-                    {(site.zones ?? []).map(zone => (
-                      <optgroup key={zone.id} label={`-- ${zone.name}`}>
-                        {(zone.areas ?? []).map(area => (
-                          <option key={area.id} value={area.id}>{`--- ${area.name}`}</option>
-                        ))}
-                      </optgroup>
-                    ))}
+                    {(site.zones ?? []).flatMap(zone =>
+                      (zone.areas ?? []).map(area => (
+                        <option key={area.id} value={area.id}>
+                          {zone.name} — {area.name}
+                        </option>
+                      ))
+                    )}
                   </optgroup>
                 ))}
               </select>
