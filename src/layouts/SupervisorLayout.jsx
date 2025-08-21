@@ -1,21 +1,29 @@
 // src/layouts/SupervisorLayout.jsx
-import React from 'react';
-import { supabase } from '../services/supabaseClient';
+import React, { useState } from 'react';
+import Sidebar from '../components/common/Sidebar';
+import Header from '../components/common/Header';
+import SupervisorDashboard from '../pages/SupervisorDashboard';
 
-export default function SupervisorLayout({ user }) {
+export default function SupervisorLayout({ session, profile }) {
+  const [currentPage, setCurrentPage] = useState('dashboard');
+
+  const renderPage = () => {
+    switch (currentPage) {
+      case 'dashboard':
+      default:
+        return <SupervisorDashboard profile={profile} />;
+    }
+  };
+
   return (
-    <div className="flex h-screen bg-blue-50">
-      <aside className="w-64 bg-blue-800 text-white p-4">
-        <h1 className="text-2xl font-bold mb-4">Supervisor Portal</h1>
-        <p>Welcome, {user.email}</p>
-        <button onClick={() => supabase.auth.signOut()} className="w-full mt-4 text-left text-red-300 hover:text-red-200">
-          Log Out
-        </button>
-      </aside>
-      <main className="flex-1 p-8">
-        <h2 className="text-3xl font-bold">Supervisor Dashboard</h2>
-        <p>Supervisor-specific content goes here.</p>
-      </main>
+    <div className="flex h-screen bg-gray-100">
+      <Sidebar user={session.user} profile={profile} currentPage={currentPage} setCurrentPage={setCurrentPage} />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header title="Supervisor Dashboard" />
+        <main className="flex-1 overflow-x-hidden overflow-y-auto p-6">
+          {renderPage()}
+        </main>
+      </div>
     </div>
   );
 }
