@@ -1,20 +1,27 @@
 // src/layouts/CleanerLayout.jsx
 import React from 'react';
 import { supabase } from '../services/supabaseClient';
+import CleanerTasksPage from '../pages/CleanerTasksPage';
 
-export default function CleanerLayout({ user }) {
+export default function CleanerLayout({ session, profile }) {
   return (
-    <div className="flex h-screen bg-green-50">
-      <aside className="w-64 bg-green-800 text-white p-4">
-        <h1 className="text-2xl font-bold mb-4">Cleaner Portal</h1>
-        <p>Welcome, {user.email}</p>
-        <button onClick={() => supabase.auth.signOut()} className="w-full mt-4 text-left text-red-300 hover:text-red-200">
-          Log Out
-        </button>
-      </aside>
-      <main className="flex-1 p-8">
-        <h2 className="text-3xl font-bold">Cleaner Dashboard</h2>
-        <p>Cleaner-specific content goes here.</p>
+    <div className="min-h-screen bg-gray-100">
+      <header className="bg-green-700 text-white shadow-md sticky top-0 z-10">
+        <div className="max-w-4xl mx-auto py-4 px-4 flex justify-between items-center">
+          <div className="flex items-center">
+            <i className="fas fa-gem text-2xl mr-3"></i>
+            <h1 className="text-xl font-semibold">PristinePoint</h1>
+          </div>
+          <div>
+            <span className="text-sm mr-4">{profile.full_name}</span>
+            <button onClick={() => supabase.auth.signOut()} className="bg-red-500 hover:bg-red-600 px-3 py-1 rounded-md text-sm">
+              Sign Out
+            </button>
+          </div>
+        </div>
+      </header>
+      <main className="p-4">
+        <CleanerTasksPage profile={profile} />
       </main>
     </div>
   );
