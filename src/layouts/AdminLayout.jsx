@@ -6,8 +6,9 @@ import DashboardPage from '../pages/Dashboard';
 import SitesPage from '../pages/Sites';
 import StaffPage from '../pages/Staff';
 import TasksPage from '../pages/Tasks';
+import AssignmentsPage from '../pages/Assignments';
 
-const validPages = ['dashboard', 'sites', 'staff', 'tasks'];
+const validPages = ['dashboard', 'sites', 'staff', 'tasks', 'assignments'];
 
 export default function AdminLayout({ session, profile }) {
   const [currentPage, setCurrentPage] = useState('dashboard');
@@ -43,6 +44,8 @@ export default function AdminLayout({ session, profile }) {
         return <StaffPage profile={profile} />;
       case 'tasks':
         return <TasksPage profile={profile} />;
+      case 'assignments':
+        return <AssignmentsPage profile={profile} />;
       case 'dashboard':
       default:
         return <DashboardPage profile={profile} />;
@@ -51,7 +54,7 @@ export default function AdminLayout({ session, profile }) {
 
   return (
     <div className="flex h-screen bg-gray-100">
-      <Sidebar user={session.user} profile={profile} currentPage={currentPage} />
+      <Sidebar user={session.user} profile={profile} currentPage={currentPage} setCurrentPage={setCurrentPage} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header title={currentPage} />
         <main className="flex-1 overflow-x-hidden overflow-y-auto p-6">
