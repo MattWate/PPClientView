@@ -22,6 +22,11 @@ export default function Sidebar({ user, profile, currentPage, setCurrentPage }) 
 
   const currentNavItems = navItems[profile.role] || [];
 
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    window.location.hash = ''; // Clear the hash to return to the landing page
+  };
+
   return (
     <aside className="w-64 bg-gray-800 text-white flex-shrink-0 flex flex-col">
       <div className="h-16 flex items-center justify-center px-4 bg-gray-900">
@@ -47,7 +52,7 @@ export default function Sidebar({ user, profile, currentPage, setCurrentPage }) 
       <div className="px-4 py-4 border-t border-gray-700">
         <p className="text-sm font-medium text-white truncate">{profile.full_name || user.email}</p>
         <p className="text-xs text-gray-400 capitalize">{profile.role}</p>
-        <button onClick={() => supabase.auth.signOut()} className="w-full mt-2 text-left text-sm text-red-400 hover:text-red-300">
+        <button onClick={handleSignOut} className="w-full mt-2 text-left text-sm text-red-400 hover:text-red-300">
           Log Out
         </button>
       </div>
