@@ -1,66 +1,107 @@
 // src/pages/SupervisorDashboard.jsx
-import React, { useState, useEffect } from 'react';
-import { supabase } from '../services/supabaseClient';
+import React, { useState, useEffect, useCallback } from 'react';
+import { supabase } from '../services/supabaseClient.js';
+
+// A reusable card component for displaying task information
+const TaskCard = ({ task }) => (
+  <div className="bg-white p-4 rounded-lg shadow-md border border-gray-200">
+    <h4 className="font-bold text-lg text-gray-800">{task.job_templates?.name || 'Unnamed Task'}</h4>
+    <p className="text-sm text-gray-600">Site: {task.sites?.name}</p>
+    <p className="text-sm text-gray-600">Zone: {task.zones?.name}</p>
+    <p className="text-sm text-gray-600">Area: {task.areas?.name}</p>
+    <div className="mt-3 pt-3 border-t">
+        <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+            task.status === 'completed' ? 'bg-green-100 text-green-800' :
+            task.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
+            'bg-gray-100 text-gray-800'
+        }`}>
+            {task.status || 'pending'}
+        </span>
+    </div>
+  </div>
+);
+
 
 export default function SupervisorDashboard({ profile }) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const fetchTasks = async () => {
-      if (!profile) return;
-      try {
-        setLoading(true);
-        // This is a placeholder; a real implementation would fetch tasks for the supervisor's zones.
-        const { data, error } = await supabase
-          .from('tasks')
-          .select('*, areas(name, zones(name, sites(name)))')
-          .eq('company_id', profile.company_id)
-          .in('status', ['pending', 'assigned', 'completed']);
+  // We use useCallback to memoize the fetch function, preventing re-renders
+  const fetchSupervisorData = useCallback(async () => {
+    if (!profile) return;
 
-        if (error) throw error;
-        setTasks(data);
-      } catch (error) {
-        setError(error.message);
-      } finally {
-        setLoading(false);
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Step 1: Fetch the zone IDs assigned to this supervisor.
+      // We assume a 'supervisor_assignments' table linking users (supervisors) to zones.
+      const { data: assignedZones, error: zonesError } = await supabase
+        .from('supervisor_assignments')
+        .select('zone_id')
+        .eq('user_id', profile.id);
+
+      if (zonesError) throw zonesError;
+      
+      const zoneIds = assignedZones.map(z => z.zone_id);
+
+      if (zoneIds.length === 0) {
+        setTasks([]);
+        return; // No zones assigned, so no tasks to fetch.
       }
-    };
-    fetchTasks();
-  }, [profile]);
 
-  if (loading) return <p>Loading tasks...</p>;
-  if (error) return <p className="text-red-600">Error: {error}</p>;
+      // Step 2: Fetch all tasks that belong to those assigned zones.
+      // We also join related tables to get names for display.
+      const { data: taskData, error: tasksError } = await supabase
+        .from('tasks')
+        .select(`
+          id,
+          status,
+          job_templates ( name ),
+          sites ( name ),
+          zones ( name ),
+          areas ( name )
+        `)
+        .in('zone_id', zoneIds);
+
+      if (tasksError) throw tasksError;
+      
+      setTasks(taskData);
+
+    } catch (error) {
+      console.error("Error fetching supervisor data:", error);
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [profile]); // The function depends on the profile prop
+
+  // useEffect hook to run the fetch function when the component mounts or profile changes
+  useEffect(() => {
+    fetchSupervisorData();
+  }, [fetchSupervisorData]);
+
+  if (loading) {
+    return <div className="p-6"><p>Loading dashboard...</p></div>;
+  }
+
+  if (error) {
+    return <div className="p-6 text-red-600"><p>Error: {error}</p></div>;
+  }
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-md">
-      <h3 className="text-xl font-semibold text-gray-800 mb-4">Task Dashboard</h3>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left">
-          <thead>
-            <tr className="text-xs text-gray-500 uppercase border-b">
-              <th className="py-3 px-4">Task</th>
-              <th className="py-3 px-4">Location</th>
-              <th className="py-3 px-4">Status</th>
-              <th className="py-3 px-4">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {tasks.map(task => (
-              <tr key={task.id} className="border-b hover:bg-gray-50">
-                <td className="py-3 px-4 font-medium">{task.title}</td>
-                <td className="py-3 px-4 text-sm">{task.areas.sites.name} > {task.areas.zones.name} > {task.areas.name}</td>
-                <td className="py-3 px-4 capitalize">{task.status}</td>
-                <td className="py-3 px-4 space-x-2">
-                  <button className="text-sm text-blue-600 hover:underline">Assign</button>
-                  <button className="text-sm text-green-600 hover:underline">Complete for Cleaner</button>
-                  <button className="text-sm text-purple-600 hover:underline">Verify</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <div className="p-6 bg-gray-50 min-h-screen">
+      <h2 className="text-2xl font-bold text-gray-800 mb-6">Supervisor Dashboard</h2>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {tasks.length > 0 ? (
+          tasks.map(task => <TaskCard key={task.id} task={task} />)
+        ) : (
+          <div className="md:col-span-2 lg:col-span-3 xl:col-span-4 bg-white p-6 rounded-lg shadow-md text-center">
+            <p className="text-gray-600">No tasks found for your assigned zones.</p>
+          </div>
+        )}
       </div>
     </div>
   );
