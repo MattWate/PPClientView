@@ -1,27 +1,33 @@
 // src/layouts/SupervisorLayout.jsx
-import React, { useState } from 'react';
-import Sidebar from '../components/common/Sidebar';
-import Header from '../components/common/Header';
-import SupervisorDashboard from '../pages/SupervisorDashboard';
+import React from 'react';
+import Header from '../components/common/Header.jsx';
+import Sidebar from '../components/common/Sidebar.jsx';
+import SupervisorDashboard from '../pages/SupervisorDashboard.jsx'; // Import the dashboard
 
 export default function SupervisorLayout({ session, profile }) {
-  const [currentPage, setCurrentPage] = useState('dashboard');
-
-  const renderPage = () => {
-    switch (currentPage) {
-      case 'dashboard':
-      default:
-        return <SupervisorDashboard profile={profile} />;
-    }
-  };
+  // Define navigation links specific to the Supervisor role
+  const supervisorNavLinks = [
+    { name: 'Dashboard', href: '#', current: true },
+    { name: 'My Tasks', href: '#', current: false },
+    { name: 'Team Status', href: '#', current: false },
+    { name: 'Reports', href: '#', current: false },
+  ];
 
   return (
     <div className="flex h-screen bg-gray-100">
-      <Sidebar user={session.user} profile={profile} currentPage={currentPage} setCurrentPage={setCurrentPage} />
+      {/* Sidebar Component */}
+      <Sidebar navLinks={supervisorNavLinks} />
+
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header title="Supervisor Dashboard" />
-        <main className="flex-1 overflow-x-hidden overflow-y-auto p-6">
-          {renderPage()}
+        {/* Header Component */}
+        <Header user={session?.user} profile={profile} />
+
+        {/* Main Content Area */}
+        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-200">
+          <div className="container mx-auto px-6 py-8">
+            {/* Render the SupervisorDashboard and pass the profile prop */}
+            <SupervisorDashboard profile={profile} />
+          </div>
         </main>
       </div>
     </div>
