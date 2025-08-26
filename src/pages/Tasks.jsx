@@ -1,9 +1,33 @@
 // src/pages/Tasks.jsx
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../services/supabaseClient';
+import { supabase } from '../services/supabaseClient.js';
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+// Helper function to convert CRON to human-readable format
+const parseCron = (cronString) => {
+  if (!cronString) return 'N/A';
+  const parts = cronString.split(' ');
+  if (parts.length < 5) return 'Invalid Schedule';
+
+  const minute = parts[0];
+  const hour = parts[1];
+  const dayOfWeek = parts[4];
+
+  // Ensure time is formatted with leading zeros if needed
+  const formattedTime = `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`;
+
+  if (dayOfWeek === '*') {
+    return `Daily at ${formattedTime}`;
+  }
+
+  const dayMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const days = dayOfWeek.split(',').map(d => dayMap[parseInt(d)] || '').join(', ');
+
+  return `Weekly on ${days} at ${formattedTime}`;
+};
+
 
 export default function TasksPage({ profile }) {
   const [areaTypes, setAreaTypes] = useState([]);
@@ -247,7 +271,7 @@ export default function TasksPage({ profile }) {
                 <tr className="text-xs text-gray-500 uppercase border-b">
                   <th className="py-3 px-4">Title</th>
                   <th className="py-3 px-4">Location</th>
-                  <th className="py-3 px-4">Schedule (Cron)</th>
+                  <th className="py-3 px-4">Schedule</th>
                 </tr>
               </thead>
               <tbody>
@@ -259,7 +283,7 @@ export default function TasksPage({ profile }) {
                       {job.areas?.zones?.name ?? '—'} &nbsp;&gt;&nbsp;
                       {job.areas?.name ?? '—'}
                     </td>
-                    <td className="py-3 px-4 font-mono text-sm">{job.cron_schedule}</td>
+                    <td className="py-3 px-4 text-sm">{parseCron(job.cron_schedule)}</td>
                   </tr>
                 ))}
               </tbody>
