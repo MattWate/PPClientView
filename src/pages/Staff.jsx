@@ -42,34 +42,24 @@ export default function StaffPage({ profile }) {
 
   const handleInviteUser = async (e) => {
     e.preventDefault();
-    if (!profile?.company_id) {
-        setFormMessage({ type: 'error', text: 'Could not identify your company. Please refresh.' });
-        return;
-    }
     setIsSubmitting(true);
     setFormMessage({ type: '', text: '' });
 
     try {
-      // The payload for the edge function
+      // The payload for the edge function - companyId is no longer needed
       const invitePayload = {
         email,
         fullName,
         role,
-        companyId: profile.company_id,
       };
-
-      // --- DEBUGGING STEP ---
-      // Log the payload to the browser console to verify its contents.
-      console.log('Sending invite payload:', invitePayload);
 
       const { data, error } = await supabase.functions.invoke('invite-user', {
         body: invitePayload,
       });
 
-      // supabase-js wraps function errors. We need to check the nested error.
-      if (error) throw error;
+      if (error) throw error; // Handles network errors
 
-      // The Edge function itself can return an error in its body.
+      // The Edge function can return a custom error in its body
       if (data?.error) {
         throw new Error(data.error);
       }
@@ -80,8 +70,19 @@ export default function StaffPage({ profile }) {
       setEmail('');
       setRole('cleaner');
     } catch (error) {
-      // Display the specific error message from the function, or a generic one.
-      setFormMessage({ type: 'error', text: error.message || 'An unknown error occurred.' });
+      // This block now properly parses the error response from the function
+      let errorMessage = 'An unknown error occurred.';
+      if (error.context && typeof error.context.json === 'function') {
+        try {
+          const functionError = await error.context.json();
+          errorMessage = functionError.error || error.message;
+        } catch {
+          errorMessage = error.message;
+        }
+      } else {
+        errorMessage = error.message;
+      }
+      setFormMessage({ type: 'error', text: errorMessage });
     } finally {
       setIsSubmitting(false);
     }
