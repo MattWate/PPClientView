@@ -1,6 +1,6 @@
 // src/pages/Staff.jsx
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../services/supabaseClient';
+import { supabase } from '../services/supabaseClient.js';
 
 export default function StaffPage({ profile }) {
   const [staff, setStaff] = useState([]);
@@ -42,14 +42,33 @@ export default function StaffPage({ profile }) {
 
   const handleInviteUser = async (e) => {
     e.preventDefault();
+    if (!profile?.company_id) {
+        setFormMessage({ type: 'error', text: 'Could not identify your company. Please refresh.' });
+        return;
+    }
     setIsSubmitting(true);
     setFormMessage({ type: '', text: '' });
+
     try {
-      const { error } = await supabase.functions.invoke('invite-user', {
-        body: { email, fullName, role, companyId: profile.company_id },
+      // The payload for the edge function
+      const invitePayload = {
+        email,
+        fullName,
+        role,
+        companyId: profile.company_id,
+      };
+
+      const { data, error } = await supabase.functions.invoke('invite-user', {
+        body: invitePayload,
       });
 
+      // supabase-js wraps function errors. We need to check the nested error.
       if (error) throw error;
+
+      // The Edge function itself can return an error in its body.
+      if (data?.error) {
+        throw new Error(data.error);
+      }
       
       setFormMessage({ type: 'success', text: `Invitation sent to ${email}.` });
       fetchStaff(); // Refresh the list
@@ -57,7 +76,8 @@ export default function StaffPage({ profile }) {
       setEmail('');
       setRole('cleaner');
     } catch (error) {
-      setFormMessage({ type: 'error', text: error.message });
+      // Display the specific error message from the function, or a generic one.
+      setFormMessage({ type: 'error', text: error.message || 'An unknown error occurred.' });
     } finally {
       setIsSubmitting(false);
     }
