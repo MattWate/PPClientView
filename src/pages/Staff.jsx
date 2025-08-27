@@ -58,6 +58,10 @@ export default function StaffPage({ profile }) {
         companyId: profile.company_id,
       };
 
+      // --- DEBUGGING STEP ---
+      // Log the payload to the browser console to verify its contents.
+      console.log('Sending invite payload:', invitePayload);
+
       const { data, error } = await supabase.functions.invoke('invite-user', {
         body: invitePayload,
       });
