@@ -41,15 +41,13 @@ export default function StaffPage({ profile }) {
     fetchStaff();
   }, [fetchStaff]);
 
-  // Helper: extract a readable message from Functions error
+  // Extract readable message from Functions error
   function extractFnError(err) {
     if (!err) return 'Unknown error';
-    // supabase-js v2 FunctionsError has { message, context }
     const ctx = err.context;
     if (ctx) {
       if (typeof ctx === 'string') return ctx;
       if (typeof ctx === 'object') {
-        // our edge function returns { error, code, stage, ... }
         if (ctx.error) return ctx.error;
         if (ctx.message) return ctx.message;
         try { return JSON.stringify(ctx); } catch {}
@@ -68,26 +66,21 @@ export default function StaffPage({ profile }) {
         body: { email, fullName, role }, // companyId handled server-side
       });
 
-      if (error) {
-        throw new Error(extractFnError(error));
-      }
+      if (error) throw new Error(extractFnError(error));
 
       const already = data?.user?.alreadyExists;
-      const who = email;
       setFormMessage({
         type: 'success',
         text: already
-          ? `That user already exists in your company.`
-          : `Invitation sent to ${who}.`,
+          ? 'That user already exists in your company.'
+          : `Invitation sent to ${email}.`,
       });
 
-      // Reset form
       setFullName('');
       setEmail('');
       setRole('cleaner');
 
-      // Refresh list (profile is created by the function on success)
-      await fetchStaff();
+      await fetchStaff(); // profile is created by the function on success
     } catch (err) {
       setFormMessage({ type: 'error', text: err.message || 'Failed to send invite.' });
     } finally {
@@ -247,4 +240,53 @@ export default function StaffPage({ profile }) {
       </div>
 
       {/* Edit User Modal */}
-      {isEditModalOpen && editin
+      {isEditModalOpen && editingUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
+          <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
+            <h3 className="text-xl font-semibold text-gray-800 mb-4">Edit Staff Member</h3>
+            <form onSubmit={handleUpdateUser} className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700">Full Name</label>
+                <input
+                  type="text"
+                  value={editingUser.full_name}
+                  onChange={(e) => setEditingUser({ ...editingUser, full_name: e.target.value })}
+                  required
+                  className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Role</label>
+                <select
+                  value={editingUser.role}
+                  onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value })}
+                  className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm"
+                >
+                  <option value="cleaner">Cleaner</option>
+                  <option value="supervisor">Supervisor</option>
+                  <option value="manager">Manager</option>
+                  <option value="viewer">Viewer</option>
+                </select>
+              </div>
+              <div className="flex justify-end space-x-2 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
