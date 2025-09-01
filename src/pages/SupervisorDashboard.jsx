@@ -1,6 +1,6 @@
 // src/pages/SupervisorDashboard.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../services/supabaseClient.js';
+import { supabase } from '../services/supabaseClient';
 
 // A reusable card component for displaying task information
 const TaskCard = ({ task }) => (
@@ -10,12 +10,12 @@ const TaskCard = ({ task }) => (
     <p className="text-sm text-gray-600">Zone: {task.zones?.name}</p>
     <p className="text-sm text-gray-600">Area: {task.areas?.name}</p>
     <div className="mt-3 pt-3 border-t">
-        <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+        <span className={`px-3 py-1 text-xs font-semibold rounded-full capitalize ${
             task.status === 'completed' ? 'bg-green-100 text-green-800' :
             task.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
             'bg-gray-100 text-gray-800'
         }`}>
-            {task.status || 'pending'}
+            {task.status ? task.status.replace('_', ' ') : 'pending'}
         </span>
     </div>
   </div>
@@ -27,7 +27,6 @@ export default function SupervisorDashboard({ profile }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // We use useCallback to memoize the fetch function, preventing re-renders
   const fetchSupervisorData = useCallback(async () => {
     if (!profile) return;
 
@@ -35,10 +34,10 @@ export default function SupervisorDashboard({ profile }) {
       setLoading(true);
       setError(null);
 
-      // Step 1: Fetch the zone IDs assigned to this supervisor.
-      // We assume a 'supervisor_assignments' table linking users (supervisors) to zones.
+      // --- THIS IS THE FIX ---
+      // Changed 'supervisor_assignments' to the correct table name 'zone_assignments'
       const { data: assignedZones, error: zonesError } = await supabase
-        .from('supervisor_assignments')
+        .from('zone_assignments')
         .select('zone_id')
         .eq('user_id', profile.id);
 
@@ -48,11 +47,10 @@ export default function SupervisorDashboard({ profile }) {
 
       if (zoneIds.length === 0) {
         setTasks([]);
-        return; // No zones assigned, so no tasks to fetch.
+        setLoading(false); // Make sure to stop loading
+        return;
       }
 
-      // Step 2: Fetch all tasks that belong to those assigned zones.
-      // We also join related tables to get names for display.
       const { data: taskData, error: tasksError } = await supabase
         .from('tasks')
         .select(`
@@ -67,7 +65,7 @@ export default function SupervisorDashboard({ profile }) {
 
       if (tasksError) throw tasksError;
       
-      setTasks(taskData);
+      setTasks(taskData || []);
 
     } catch (error) {
       console.error("Error fetching supervisor data:", error);
@@ -75,9 +73,8 @@ export default function SupervisorDashboard({ profile }) {
     } finally {
       setLoading(false);
     }
-  }, [profile]); // The function depends on the profile prop
+  }, [profile]);
 
-  // useEffect hook to run the fetch function when the component mounts or profile changes
   useEffect(() => {
     fetchSupervisorData();
   }, [fetchSupervisorData]);
@@ -106,3 +103,4 @@ export default function SupervisorDashboard({ profile }) {
     </div>
   );
 }
+
