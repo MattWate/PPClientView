@@ -33,7 +33,7 @@ const ProfileNotFound = () => (
 export default function App() {
   const { session, loading: authLoading } = useAuth();
   const [profile, setProfile] = useState(null);
-  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(true); // Default to true
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -60,48 +60,48 @@ export default function App() {
           setProfileLoading(false);
         }
       } else {
-        // No session, so clear any existing profile
+        // No session, so clear any existing profile and stop loading.
         setProfile(null);
+        setProfileLoading(false);
       }
     };
 
     fetchProfile();
   }, [session]);
 
-  // --- NEW, SIMPLIFIED RENDER LOGIC ---
+  // --- ROBUST RENDER LOGIC ---
 
-  // 1. Show a loading screen while authentication or profile fetching is in progress.
-  if (authLoading || (session && profileLoading)) {
+  // While the initial authentication check is running, show a loading screen.
+  if (authLoading) {
     return <LoadingScreen />;
   }
 
-  // 2. If not loading and no session exists, show the public home/login page.
+  // If authentication is done and there's no user session, show the login page.
   if (!session) {
     return <PublicHomePage />;
   }
 
-  // 3. If a session exists but the profile could not be fetched, show an error.
-  // This is the critical fix for your blank page issue.
-  if (session && !profile) {
+  // If there is a session, but we are still fetching the profile, show a loading screen.
+  if (profileLoading) {
+    return <LoadingScreen />;
+  }
+
+  // If fetching is complete, but we still don't have a profile, it's an error.
+  if (!profile) {
     return <ProfileNotFound />;
   }
 
-  // 4. If we get here, we have a session and a profile. Render the correct layout.
-  if (profile) {
-    switch (profile.role) {
-      case 'admin':
-        return <AdminLayout session={session} profile={profile} />;
-      case 'supervisor':
-        return <SupervisorLayout session={session} profile={profile} />;
-      case 'cleaner':
-        return <CleanerLayout session={session} profile={profile} />;
-      default:
-        // A user has an unknown role.
-        return <ProfileNotFound />;
-    }
+  // If all checks pass, we have a session and a profile. Render the correct layout.
+  switch (profile.role) {
+    case 'admin':
+      return <AdminLayout session={session} profile={profile} />;
+    case 'supervisor':
+      return <SupervisorLayout session={session} profile={profile} />;
+    case 'cleaner':
+      return <CleanerLayout session={session} profile={profile} />;
+    default:
+      // A user has a profile but an unknown role.
+      return <ProfileNotFound />;
   }
-
-  // Fallback in case none of the above conditions are met.
-  return <PublicHomePage />;
 }
 
