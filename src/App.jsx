@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from './contexts/AuthContext';
-import { supabase } from './services/supabaseClient';
-import PublicHomePage from './pages/PublicHomePage';
-import AdminLayout from './layouts/AdminLayout';
-import SupervisorLayout from './layouts/SupervisorLayout';
-import CleanerLayout from './layouts/CleanerLayout';
+import { useAuth } from './contexts/AuthContext.jsx';
+import { supabase } from './services/supabaseClient.js';
+import PublicHomePage from './pages/PublicHomePage.jsx';
+import AdminLayout from './layouts/AdminLayout.jsx';
+import SupervisorLayout from './layouts/SupervisorLayout.jsx';
+import CleanerLayout from './layouts/CleanerLayout.jsx';
 
 // A simple loading component to show while fetching data.
 const LoadingScreen = () => (
@@ -41,9 +41,12 @@ export default function App() {
       // Only run if we have a confirmed user session
       if (session?.user) {
         try {
+          // --- THIS IS THE FIX ---
+          // Instead of a broad select('*'), we explicitly ask for the columns we need.
+          // This is more robust against unexpected RLS behavior.
           const { data: userProfile, error } = await supabase
             .from('profiles')
-            .select('*')
+            .select('id, full_name, role, company_id') // Explicitly select the role
             .eq('id', session.user.id)
             .single();
 
