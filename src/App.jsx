@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from 'contexts/AuthContext.jsx';
-import { supabase } from 'services/supabaseClient.js';
-import PublicHomePage from 'pages/PublicHomePage.jsx';
-import AdminLayout from 'layouts/AdminLayout.jsx';
-import SupervisorLayout from 'layouts/SupervisorLayout.jsx';
-import CleanerLayout from 'layouts/CleanerLayout.jsx';
+import { useAuth } from './contexts/AuthContext.jsx';
+import { supabase } from './services/supabaseClient.js';
+import PublicHomePage from './pages/PublicHomePage.jsx';
+import AdminLayout from './layouts/AdminLayout.jsx';
+import SupervisorLayout from './layouts/SupervisorLayout.jsx';
+import CleanerLayout from './layouts/CleanerLayout.jsx';
 
 // A simple loading component to show while fetching data.
 const LoadingScreen = () => (
