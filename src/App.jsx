@@ -39,6 +39,11 @@ export default function App() {
     const fetchProfile = async () => {
       if (session?.user) {
         setProfileLoading(true);
+        
+        // --- NEW: DEBUGGING LOG ---
+        // Let's see exactly what user ID the app is using for the query.
+        console.log('Fetching profile for user ID:', session.user.id);
+
         try {
           const { data: userProfile, error } = await supabase
             .from('profiles')
@@ -47,20 +52,19 @@ export default function App() {
             .single();
 
           if (error) {
-            // This will catch RLS errors if the user has no access
             throw new Error(`Supabase query failed: ${error.message}`);
           }
           
+          console.log('Successfully fetched profile:', userProfile);
           setProfile(userProfile);
 
         } catch (error) {
           console.error("Error fetching profile:", error);
-          setProfile(null); // Ensure profile is null on error
+          setProfile(null);
         } finally {
           setProfileLoading(false);
         }
       } else {
-        // No session, so clear any existing profile and stop loading.
         setProfile(null);
         setProfileLoading(false);
       }
@@ -71,27 +75,22 @@ export default function App() {
 
   // --- ROBUST RENDER LOGIC ---
 
-  // While the initial authentication check is running, show a loading screen.
   if (authLoading) {
     return <LoadingScreen />;
   }
 
-  // If authentication is done and there's no user session, show the login page.
   if (!session) {
     return <PublicHomePage />;
   }
 
-  // If there is a session, but we are still fetching the profile, show a loading screen.
   if (profileLoading) {
     return <LoadingScreen />;
   }
 
-  // If fetching is complete, but we still don't have a profile, it's an error.
   if (!profile) {
     return <ProfileNotFound />;
   }
 
-  // If all checks pass, we have a session and a profile. Render the correct layout.
   switch (profile.role) {
     case 'admin':
       return <AdminLayout session={session} profile={profile} />;
@@ -100,7 +99,6 @@ export default function App() {
     case 'cleaner':
       return <CleanerLayout session={session} profile={profile} />;
     default:
-      // A user has a profile but an unknown role.
       return <ProfileNotFound />;
   }
 }
