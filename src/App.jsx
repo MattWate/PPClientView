@@ -6,19 +6,39 @@ import AdminLayout from './layouts/AdminLayout.jsx';
 import SupervisorLayout from './layouts/SupervisorLayout.jsx';
 import CleanerLayout from './layouts/CleanerLayout.jsx';
 
-// A simple loading component to show while fetching data.
+// Minimal Error Boundary to surface layout crashes (e.g., reading undefined)
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="p-6 max-w-xl mx-auto my-16 bg-red-50 border border-red-200 rounded-lg">
+          <h2 className="text-xl font-semibold text-red-700 mb-2">Something went wrong in the layout.</h2>
+          <pre className="text-sm text-red-800 whitespace-pre-wrap">{String(this.state.error)}</pre>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const LoadingScreen = () => (
   <div className="flex items-center justify-center h-screen bg-gray-100">
     <p className="text-gray-600">Loading...</p>
   </div>
 );
 
-// A component to show if a user is logged in but their profile is missing.
 const ProfileNotFound = () => (
   <div className="flex flex-col items-center justify-center h-screen bg-gray-100 p-4 text-center">
     <h2 className="text-2xl font-bold text-red-600 mb-2">Profile Not Found</h2>
     <p className="text-gray-700 mb-4">
-      Your user profile could not be loaded. This may be due to a permissions issue (RLS) or missing data.
+      Your user profile could not be loaded. This may be due to permissions or missing fields (e.g., role/company).
     </p>
     <button
       onClick={() => supabase.auth.signOut()}
@@ -29,82 +49,66 @@ const ProfileNotFound = () => (
   </div>
 );
 
-
 export default function App() {
   const { session, loading: authLoading } = useAuth();
   const [profile, setProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(true);
 
   useEffect(() => {
-    let isMounted = true; // --- FIX: Track if the component is still mounted ---
+    let isMounted = true;
 
     const fetchProfile = async () => {
-      if (session?.user) {
-        try {
-          const { data: userProfile, error } = await supabase
-            .from('profiles')
-            .select('id, full_name, role, company_id')
-            .eq('id', session.user.id)
-            .single();
-
-          if (error) throw error;
-          
-          // --- FIX: Only update state if the component is still mounted ---
-          if (isMounted) {
-            setProfile(userProfile);
-          }
-
-        } catch (error) {
-          console.error("Error fetching profile:", error);
-          if (isMounted) {
-            setProfile(null);
-          }
-        } finally {
-          if (isMounted) {
-            setProfileLoading(false);
-          }
-        }
-      } else {
+      // No session: ensure clean state
+      if (!session?.user?.id) {
         if (isMounted) {
           setProfile(null);
           setProfileLoading(false);
         }
+        return;
+      }
+
+      // IMPORTANT: set loading true whenever a session exists and we fetch
+      if (isMounted) setProfileLoading(true);
+
+      try {
+        const { data: userProfile, error } = await supabase
+          .from('profiles')
+          .select('id, full_name, role, company_id')
+          .eq('id', session.user.id)
+          .maybeSingle();
+
+        if (error) throw error;
+        if (isMounted) setProfile(userProfile || null);
+      } catch (err) {
+        console.error('Error fetching profile:', err);
+        if (isMounted) setProfile(null);
+      } finally {
+        if (isMounted) setProfileLoading(false);
       }
     };
 
     fetchProfile();
-
-    // --- FIX: The cleanup function ---
-    // This runs when the component unmounts or if the effect re-runs.
-    // It prevents setting state on an unmounted component.
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, [session]);
 
-  // --- ROBUST RENDER LOGIC (No changes needed here) ---
+  // Gates
+  if (authLoading || (session && profileLoading)) return <LoadingScreen />;
+  if (!session) return <PublicHomePage />;
 
-  if (authLoading || (session && profileLoading)) {
-    return <LoadingScreen />;
-  }
+  // Route by normalized role
+  const role = (profile?.role ?? '').toString().trim().toLowerCase();
 
-  if (!session) {
-    return <PublicHomePage />;
-  }
+  let Layout = null;
+  if (role === 'admin') Layout = AdminLayout;
+  else if (role === 'supervisor') Layout = SupervisorLayout;
+  else if (role === 'cleaner') Layout = CleanerLayout;
 
-  if (profile && profile.role) {
-    switch (profile.role) {
-      case 'admin':
-        return <AdminLayout session={session} profile={profile} />;
-      case 'supervisor':
-        return <SupervisorLayout session={session} profile={profile} />;
-      case 'cleaner':
-        return <CleanerLayout session={session} profile={profile} />;
-      default:
-        return <ProfileNotFound />;
-    }
-  }
+  if (!Layout) return <ProfileNotFound />;
 
-  return <ProfileNotFound />;
+  // Catch crashes inside the chosen layout (missing company_id, etc.)
+  return (
+    <ErrorBoundary>
+      <Layout session={session} profile={profile} />
+    </ErrorBoundary>
+  );
 }
-
