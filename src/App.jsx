@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from './contexts/AuthContext.jsx';
-import { supabase } from './services/supabaseClient.js';
-import PublicHomePage from './pages/PublicHomePage.jsx';
-import AdminLayout from './layouts/AdminLayout.jsx';
-import SupervisorLayout from './layouts/SupervisorLayout.jsx';
-import CleanerLayout from './layouts/CleanerLayout.jsx';
+import { useAuth } from './contexts/AuthContext';
+import { supabase } from './services/supabaseClient';
+import PublicHomePage from './pages/PublicHomePage';
+import AdminLayout from './layouts/AdminLayout';
+import SupervisorLayout from './layouts/SupervisorLayout';
+import CleanerLayout from './layouts/CleanerLayout';
 
 // A simple loading component to show while fetching data.
 const LoadingScreen = () => (
@@ -68,7 +68,7 @@ export default function App() {
     fetchProfile();
   }, [session]);
 
-  // --- NEW, MORE ROBUST RENDER LOGIC ---
+  // --- ROBUST RENDER LOGIC ---
 
   // While the initial session is being determined, always show the loading screen.
   if (authLoading) {
@@ -86,8 +86,9 @@ export default function App() {
     return <LoadingScreen />;
   }
 
-  // If we are done loading the profile, and it was successfully found, render the correct layout.
-  if (profile) {
+  // --- THE FINAL FIX ---
+  // If we are done loading the profile, and it exists WITH a role, render the correct layout.
+  if (profile && profile.role) {
     switch (profile.role) {
       case 'admin':
         return <AdminLayout session={session} profile={profile} />;
@@ -101,7 +102,7 @@ export default function App() {
     }
   }
 
-  // The only remaining case: loading is finished, a session exists, but the profile is null.
+  // The only remaining cases: loading is finished, a session exists, but the profile is null OR the profile has no role.
   // This is the error state.
   return <ProfileNotFound />;
 }
