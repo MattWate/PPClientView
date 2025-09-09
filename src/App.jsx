@@ -36,61 +36,62 @@ export default function App() {
   const [profileLoading, setProfileLoading] = useState(true);
 
   useEffect(() => {
-    // Function to fetch the user's profile from the database
+    let isMounted = true; // --- FIX: Track if the component is still mounted ---
+
     const fetchProfile = async () => {
-      // Only run if we have a confirmed user session
       if (session?.user) {
         try {
           const { data: userProfile, error } = await supabase
             .from('profiles')
-            .select('id, full_name, role, company_id') // Explicitly select the role
+            .select('id, full_name, role, company_id')
             .eq('id', session.user.id)
             .single();
 
           if (error) throw error;
           
-          // --- NEW: DEBUGGING LOG ---
-          // Let's see exactly what the database returned.
-          console.log("Fetched profile data:", userProfile);
-
-          // On success, update the profile state
-          setProfile(userProfile);
+          // --- FIX: Only update state if the component is still mounted ---
+          if (isMounted) {
+            setProfile(userProfile);
+          }
 
         } catch (error) {
           console.error("Error fetching profile:", error);
-          setProfile(null); // Explicitly set profile to null on failure
+          if (isMounted) {
+            setProfile(null);
+          }
         } finally {
-          // No matter what, stop the loading process
-          setProfileLoading(false);
+          if (isMounted) {
+            setProfileLoading(false);
+          }
         }
       } else {
-        // If there's no session, ensure we're not in a loading state
-        setProfileLoading(false);
+        if (isMounted) {
+          setProfile(null);
+          setProfileLoading(false);
+        }
       }
     };
 
     fetchProfile();
+
+    // --- FIX: The cleanup function ---
+    // This runs when the component unmounts or if the effect re-runs.
+    // It prevents setting state on an unmounted component.
+    return () => {
+      isMounted = false;
+    };
   }, [session]);
 
-  // --- ROBUST RENDER LOGIC ---
+  // --- ROBUST RENDER LOGIC (No changes needed here) ---
 
-  // While the initial session is being determined, always show the loading screen.
-  if (authLoading) {
+  if (authLoading || (session && profileLoading)) {
     return <LoadingScreen />;
   }
 
-  // If there's no session, show the public login page.
   if (!session) {
     return <PublicHomePage />;
   }
 
-  // If there IS a session, but we are still waiting for the profile to load,
-  // continue to show the loading screen.
-  if (profileLoading) {
-    return <LoadingScreen />;
-  }
-
-  // If we are done loading the profile, and it exists WITH a role, render the correct layout.
   if (profile && profile.role) {
     switch (profile.role) {
       case 'admin':
@@ -100,13 +101,10 @@ export default function App() {
       case 'cleaner':
         return <CleanerLayout session={session} profile={profile} />;
       default:
-        // A user has a profile but an unknown role.
         return <ProfileNotFound />;
     }
   }
 
-  // The only remaining cases: loading is finished, a session exists, but the profile is null OR the profile has no role.
-  // This is the error state.
   return <ProfileNotFound />;
 }
 
