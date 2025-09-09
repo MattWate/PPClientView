@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../services/supabaseClient';
-import TaskDetailModal from '../components/modals/TaskDetailModal'; // Import the new modal
+import TaskDetailModal from '../components/modals/TaskDetailModal';
 
-// TaskCard is now a button to trigger the modal
 const TaskCard = ({ task, onSelectTask }) => (
   <button
     onClick={() => onSelectTask(task)}
     className="bg-white p-4 rounded-lg shadow-md border border-gray-200 text-left hover:shadow-lg hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
   >
-    <h4 className="font-bold text-lg text-gray-800">{task.job_templates?.name || 'Unnamed Task'}</h4>
+    {/* --- FIX: Use .description instead of .name --- */}
+    <h4 className="font-bold text-lg text-gray-800">{task.job_templates?.description || 'Unnamed Task'}</h4>
     <p className="text-sm text-gray-600">Site: {task.sites?.name}</p>
     <p className="text-sm text-gray-600">Zone: {task.zones?.name}</p>
     <p className="text-sm text-gray-600">Area: {task.areas?.name}</p>
@@ -29,17 +29,13 @@ export default function SupervisorDashboard({ profile }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // State for managing the selected task and modal visibility
   const [selectedTask, setSelectedTask] = useState(null);
 
   const fetchSupervisorData = useCallback(async () => {
-    // ... (rest of the fetch function is unchanged)
     if (!profile) return;
-
     try {
       setLoading(true);
       setError(null);
-
       const { data: assignedZones, error: zonesError } = await supabase
         .from('zone_assignments')
         .select('zone_id')
@@ -60,11 +56,12 @@ export default function SupervisorDashboard({ profile }) {
         .select(`
           id,
           status,
-          job_templates ( name, description ),
+          assigned_to,
+          job_templates ( description ), 
           sites ( name ),
           zones ( name ),
           areas ( name )
-        `)
+        `) // --- FIX: Select 'description' instead of 'name' ---
         .in('zone_id', zoneIds);
 
       if (tasksError) throw tasksError;
@@ -107,11 +104,12 @@ export default function SupervisorDashboard({ profile }) {
         </div>
       </div>
 
-      {/* Render the modal when a task is selected */}
       <TaskDetailModal
         task={selectedTask}
         isOpen={!!selectedTask}
         onClose={() => setSelectedTask(null)}
+        onTaskUpdate={fetchSupervisorData}
+        profile={profile}
       />
     </>
   );
