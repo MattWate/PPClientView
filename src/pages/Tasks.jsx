@@ -1,31 +1,39 @@
-// src/pages/Tasks.jsx
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../services/supabaseClient.js';
+import { supabase } from './services/supabaseClient.js';
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 // Helper function to convert CRON to human-readable format
 const parseCron = (cronString) => {
-  if (!cronString) return 'N/A';
-  const parts = cronString.split(' ');
-  if (parts.length < 5) return 'Invalid Schedule';
+    if (!cronString) return 'N/A';
+    const parts = cronString.split(' ');
+    if (parts.length < 5) return 'Invalid Schedule';
 
-  const minute = parts[0];
-  const hour = parts[1];
-  const dayOfWeek = parts[4];
+    const minute = parts[0].padStart(2, '0');
+    const hour = parts[1].padStart(2, '0');
+    const dayOfMonth = parts[2];
+    const month = parts[3];
+    const dayOfWeek = parts[4];
 
-  // Ensure time is formatted with leading zeros if needed
-  const formattedTime = `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`;
-
-  if (dayOfWeek === '*') {
+    const formattedTime = `${hour}:${minute}`;
+    const monthMap = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    if (dayOfMonth !== '*' && month !== '*' && dayOfWeek === '*') {
+        if (month.includes(',')) {
+             return `Quarterly on day ${dayOfMonth} at ${formattedTime}`;
+        }
+        return `Annually on ${monthMap[parseInt(month) - 1]} ${dayOfMonth} at ${formattedTime}`;
+    }
+    if (dayOfMonth !== '*' && month === '*' && dayOfWeek === '*') {
+        return `Monthly on day ${dayOfMonth} at ${formattedTime}`;
+    }
+    if (dayOfWeek !== '*') {
+        const dayMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const days = dayOfWeek.split(',').map(d => dayMap[parseInt(d)] || '').join(', ');
+        return `Weekly on ${days} at ${formattedTime}`;
+    }
     return `Daily at ${formattedTime}`;
-  }
-
-  const dayMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const days = dayOfWeek.split(',').map(d => dayMap[parseInt(d)] || '').join(', ');
-
-  return `Weekly on ${days} at ${formattedTime}`;
 };
 
 
@@ -40,8 +48,16 @@ export default function TasksPage({ profile }) {
   const [newAreaTypeName, setNewAreaTypeName] = useState('');
   const [selectedAreaType, setSelectedAreaType] = useState(null);
   const [newJobDescription, setNewJobDescription] = useState('');
-  const [newScheduledJob, setNewScheduledJob] = useState({ title: '', area_id: '' }); // <- string UUID
-  const [schedule, setSchedule] = useState({ type: 'daily', time: '08:00', days: [] });
+  const [newScheduledJob, setNewScheduledJob] = useState({ title: '', area_id: '' });
+  
+  // --- NEW: Updated schedule state to handle more options ---
+  const [schedule, setSchedule] = useState({
+    type: 'daily',
+    time: '08:00',
+    days: [], // for weekly
+    dayOfMonth: 1, // for monthly & annually
+    month: 1, // for annually
+  });
 
   const fetchPageData = async () => {
     if (!profile) return;
@@ -94,7 +110,7 @@ export default function TasksPage({ profile }) {
     e.preventDefault();
     try {
       setError(null);
-      const { data, error } = await supabase
+      const { data, error: error } = await supabase
         .from('area_types')
         .insert({ name: newAreaTypeName.trim(), company_id: profile.company_id })
         .select('id,name, job_templates(id,description)')
@@ -132,22 +148,37 @@ export default function TasksPage({ profile }) {
     }
   };
 
+  // --- NEW: Updated logic to generate advanced CRON schedules ---
   const handleCreateScheduledJob = async (e) => {
     e.preventDefault();
     try {
       const [hour, minute] = schedule.time.split(':');
-      let cron_schedule = `${minute} ${hour} * * `;
-      if (schedule.type === 'daily') {
-        cron_schedule += '*';
-      } else {
-        if (schedule.days.length === 0) {
-          setError('Please select at least one day for weekly schedules.');
-          return;
-        }
-        cron_schedule += [...schedule.days].sort().join(','); // 0=Sun ... 6=Sat
+      let cron_schedule = '';
+
+      switch (schedule.type) {
+        case 'daily':
+          cron_schedule = `${minute} ${hour} * * *`;
+          break;
+        case 'weekly':
+          if (schedule.days.length === 0) {
+            setError('Please select at least one day for weekly schedules.');
+            return;
+          }
+          cron_schedule = `${minute} ${hour} * * ${[...schedule.days].sort().join(',')}`;
+          break;
+        case 'monthly':
+          cron_schedule = `${minute} ${hour} ${schedule.dayOfMonth} * *`;
+          break;
+        case 'quarterly':
+          cron_schedule = `${minute} ${hour} ${schedule.dayOfMonth} 1,4,7,10 *`;
+          break;
+        case 'annually':
+          cron_schedule = `${minute} ${hour} ${schedule.dayOfMonth} ${schedule.month} *`;
+          break;
+        default:
+          throw new Error('Invalid schedule type');
       }
 
-      // Validate area_id as a UUID string
       if (!UUID_RE.test(newScheduledJob.area_id)) {
         setError('Please choose a valid Area before scheduling the job.');
         return;
@@ -155,7 +186,7 @@ export default function TasksPage({ profile }) {
 
       const payload = {
         title: newScheduledJob.title.trim(),
-        area_id: newScheduledJob.area_id, // string UUID
+        area_id: newScheduledJob.area_id,
         company_id: profile.company_id,
         cron_schedule,
       };
@@ -165,7 +196,7 @@ export default function TasksPage({ profile }) {
 
       await fetchPageData();
       setNewScheduledJob({ title: '', area_id: '' });
-      setSchedule({ type: 'daily', time: '08:00', days: [] });
+      setSchedule({ type: 'daily', time: '08:00', days: [], dayOfMonth: 1, month: 1 });
       setError(null);
     } catch (err) {
       setError(err.message);
@@ -187,7 +218,7 @@ export default function TasksPage({ profile }) {
 
   return (
     <div className="space-y-8">
-      {/* Area Types and Job Templates Section */}
+      {/* Area Types and Job Templates Section (No changes here) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-md">
           <h3 className="text-xl font-semibold text-gray-800 mb-4">Area Types &amp; Job Templates</h3>
@@ -305,7 +336,6 @@ export default function TasksPage({ profile }) {
               />
             </div>
 
-            {/* Area select: keep UUID strings; enforce real choice */}
             <div>
               <label className="text-sm font-medium text-gray-700">Area</label>
               <select
@@ -313,7 +343,7 @@ export default function TasksPage({ profile }) {
                 onChange={e =>
                   setNewScheduledJob({
                     ...newScheduledJob,
-                    area_id: e.target.value, // UUID string
+                    area_id: e.target.value,
                   })
                 }
                 required
@@ -341,6 +371,7 @@ export default function TasksPage({ profile }) {
               )}
             </div>
 
+            {/* --- NEW: Updated Frequency Dropdown and Conditional Inputs --- */}
             <div>
               <label className="text-sm font-medium text-gray-700">Frequency</label>
               <select
@@ -350,6 +381,9 @@ export default function TasksPage({ profile }) {
               >
                 <option value="daily">Daily</option>
                 <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="quarterly">Quarterly</option>
+                <option value="annually">Annually</option>
               </select>
             </div>
 
@@ -378,6 +412,36 @@ export default function TasksPage({ profile }) {
                 </div>
               </div>
             )}
+            
+            {['monthly', 'quarterly', 'annually'].includes(schedule.type) && (
+                 <div>
+                    <label className="text-sm font-medium text-gray-700">Day of Month</label>
+                    <input
+                        type="number"
+                        value={schedule.dayOfMonth}
+                        onChange={e => setSchedule({ ...schedule, dayOfMonth: parseInt(e.target.value) })}
+                        min="1" max="31" required
+                        className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm"
+                    />
+                 </div>
+            )}
+
+            {schedule.type === 'annually' && (
+                 <div>
+                    <label className="text-sm font-medium text-gray-700">Month</label>
+                    <select
+                        value={schedule.month}
+                        onChange={e => setSchedule({ ...schedule, month: parseInt(e.target.value) })}
+                        required
+                        className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm"
+                    >
+                        {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                            <option key={m} value={m}>{new Date(0, m-1).toLocaleString('default', { month: 'long' })}</option>
+                        ))}
+                    </select>
+                 </div>
+            )}
+
 
             <div>
               <label className="text-sm font-medium text-gray-700">Time</label>
@@ -402,3 +466,4 @@ export default function TasksPage({ profile }) {
     </div>
   );
 }
+
