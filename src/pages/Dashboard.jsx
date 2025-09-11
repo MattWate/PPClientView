@@ -1,9 +1,8 @@
-// src/pages/Dashboard.jsx
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../services/supabaseClient';
+import { supabase } from '../services/supabaseClient.js';
 
 export default function DashboardPage({ profile }) {
-  const [stats, setStats] = useState({ completed: 0, issues: 0, active: 0, compliance: 0 });
+  const [stats, setStats] = useState({ completed: 0, issues: 0, active: 0, compliance: 0, sites: 0 });
   const [recentActivity, setRecentActivity] = useState([]);
   const [openIssues, setOpenIssues] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -15,19 +14,22 @@ export default function DashboardPage({ profile }) {
       try {
         setLoading(true);
         
-        // Fetch stats in parallel
-        const [completed, issues, activity, compliance] = await Promise.all([
+        // --- NEW: Fetch site count along with other stats ---
+        const [completed, issues, activity, compliance, sitesCount] = await Promise.all([
           supabase.rpc('count_tasks_today', { p_company_id: profile.company_id, p_statuses: ['completed', 'verified'] }),
           supabase.rpc('count_tasks_today', { p_company_id: profile.company_id, p_task_type: 'issue' }),
           supabase.rpc('count_active_staff_today', { p_company_id: profile.company_id }),
-          supabase.rpc('calculate_compliance_rate', { p_company_id: profile.company_id })
+          supabase.rpc('calculate_compliance_rate', { p_company_id: profile.company_id }),
+          // Efficiently count sites without fetching all the data
+          supabase.from('sites').select('*', { count: 'exact', head: true }).eq('company_id', profile.company_id),
         ]);
 
         setStats({
           completed: completed.data || 0,
           issues: issues.data || 0,
           active: activity.data || 0,
-          compliance: compliance.data ? (compliance.data * 100).toFixed(1) : 0
+          compliance: compliance.data ? (compliance.data * 100).toFixed(1) : 0,
+          sites: sitesCount.count || 0, // Add site count to state
         });
 
         // Fetch recent activity tasks
@@ -89,7 +91,9 @@ export default function DashboardPage({ profile }) {
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+        {/* --- NEW: Added Site Count KPI Card --- */}
+        <KpiCard title="Total Sites" value={stats.sites} icon="fa-sitemap" color="purple" />
         <KpiCard title="Tasks Completed Today" value={stats.completed} icon="fa-check-circle" color="green" />
         <KpiCard title="Issues Reported Today" value={stats.issues} icon="fa-exclamation-triangle" color="red" />
         <KpiCard title="Staff Active Today" value={stats.active} icon="fa-user-clock" color="blue" />
@@ -111,7 +115,7 @@ export default function DashboardPage({ profile }) {
                     {task.profiles?.full_name || 'System'} completed "{task.title}"
                   </p>
                   <p className="text-xs text-gray-500">
-                    {task.areas?.sites?.name} > {task.areas?.zones?.name} > {task.areas?.name}
+                    {task.areas?.sites?.name} &gt; {task.areas?.zones?.name} &gt; {task.areas?.name}
                   </p>
                 </div>
               </li>
@@ -124,7 +128,7 @@ export default function DashboardPage({ profile }) {
             {openIssues.map(issue => (
               <li key={issue.id} className="p-3 bg-red-50 rounded-md">
                 <p className="font-semibold text-red-800">{issue.title}</p>
-                <p className="text-xs text-red-600">{issue.areas?.sites?.name} > {issue.areas?.zones?.name} > {issue.areas?.name}</p>
+                <p className="text-xs text-red-600">{issue.areas?.sites?.name} &gt; {issue.areas?.zones?.name} &gt; {issue.areas?.name}</p>
               </li>
             ))}
           </ul>
@@ -140,6 +144,7 @@ const KpiCard = ({ title, value, icon, color }) => {
     red: 'bg-red-100 text-red-600',
     blue: 'bg-blue-100 text-blue-600',
     yellow: 'bg-yellow-100 text-yellow-600',
+    purple: 'bg-purple-100 text-purple-600', // Added purple for the new card
   };
   return (
     <div className="bg-white p-6 rounded-lg shadow-md flex items-center justify-between">
@@ -153,3 +158,4 @@ const KpiCard = ({ title, value, icon, color }) => {
     </div>
   );
 };
+
