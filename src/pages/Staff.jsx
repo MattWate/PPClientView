@@ -1,6 +1,6 @@
-// src/pages/Staff.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../services/supabaseClient.js';
+import { supabase } from '../services/supabaseClient';
+import SchedulePanel from '../components/admin/SchedulePanel'; // Import the new component
 
 export default function StaffPage({ profile }) {
   const [staff, setStaff] = useState([]);
@@ -98,12 +98,12 @@ export default function StaffPage({ profile }) {
 
       if (error) throw error;
       await fetchStaff();
-      setIsEditModalOpen(false);
+      // Keep the modal open so the user can manage the schedule
     } catch (err) {
       setError(err.message || 'Update failed.');
     }
   };
-
+  
   const handleToggleActive = async (user) => {
     try {
       const { error } = await supabase
@@ -242,9 +242,9 @@ export default function StaffPage({ profile }) {
       {/* Edit User Modal */}
       {isEditModalOpen && editingUser && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
-          <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
+          <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-2xl">
             <h3 className="text-xl font-semibold text-gray-800 mb-4">Edit Staff Member</h3>
-            <form onSubmit={handleUpdateUser} className="space-y-4">
+            <form onSubmit={handleUpdateUser} className="space-y-4 mb-6">
               <div>
                 <label className="text-sm font-medium text-gray-700">Full Name</label>
                 <input
@@ -268,25 +268,32 @@ export default function StaffPage({ profile }) {
                   <option value="viewer">Viewer</option>
                 </select>
               </div>
-              <div className="flex justify-end space-x-2 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setIsEditModalOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
-                >
-                  Save Changes
-                </button>
+              <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+                  >
+                    Save Changes
+                  </button>
               </div>
             </form>
+            
+            {/* --- NEW: Schedule Panel --- */}
+            <SchedulePanel user={editingUser} />
+            
+            <div className="flex justify-end space-x-2 pt-6 mt-6 border-t">
+              <button
+                type="button"
+                onClick={() => setIsEditModalOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
     </>
   );
 }
+
