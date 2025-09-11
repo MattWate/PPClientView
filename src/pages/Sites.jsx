@@ -1,6 +1,6 @@
-// src/pages/Sites.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../services/supabaseClient';
+import AreaEditModal from '../components/modals/AreaEditModal'; // We'll create this next
 
 export default function SitesPage({ profile }) {
   const [sites, setSites] = useState([]);
@@ -16,21 +16,20 @@ export default function SitesPage({ profile }) {
   const [activeSiteId, setActiveSiteId] = useState(null);
   const [activeZoneId, setActiveZoneId] = useState(null);
 
-  // State for QR Code Modal
-  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
-  const [qrCodeData, setQrCodeData] = useState(null);
+  // --- NEW: State for the Area Edit Modal ---
+  const [editingArea, setEditingArea] = useState(null);
 
-  const fetchFullHierarchy = async () => {
+  const fetchFullHierarchy = useCallback(async () => {
     if (!profile) return;
     try {
       setLoading(true);
       const { data, error } = await supabase
         .from('sites')
-        .select('*, zones(*, areas(*, area_types(name)))')
+        .select('*, zones(*, areas(*, area_types(id, name)))') // Include area_type id
         .eq('company_id', profile.company_id);
 
       if (error) throw error;
-      setSites(data);
+      setSites(data || []);
 
       const { data: typesData, error: typesError } = await supabase
         .from('area_types')
@@ -38,18 +37,18 @@ export default function SitesPage({ profile }) {
         .eq('company_id', profile.company_id);
 
       if (typesError) throw typesError;
-      setAreaTypes(typesData);
+      setAreaTypes(typesData || []);
 
-    } catch (error) {
-      setError(error.message);
+    } catch (err) {
+      setError(err.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [profile]);
 
   useEffect(() => {
     fetchFullHierarchy();
-  }, [profile]);
+  }, [fetchFullHierarchy]);
 
   const handleCreate = async (e, type) => {
     e.preventDefault();
@@ -61,8 +60,7 @@ export default function SitesPage({ profile }) {
       result = await supabase.from('zones').insert({ name: newZoneName, site_id: activeSiteId, company_id: profile.company_id });
       setNewZoneName('');
     } else if (type === 'area') {
-      const qr_code_id = crypto.randomUUID();
-      result = await supabase.from('areas').insert({ name: newAreaName, zone_id: activeZoneId, company_id: profile.company_id, area_type_id: selectedAreaTypeId || null, qr_code_id });
+      result = await supabase.from('areas').insert({ name: newAreaName, zone_id: activeZoneId, company_id: profile.company_id, area_type_id: selectedAreaTypeId || null });
       setNewAreaName('');
       setSelectedAreaTypeId('');
     }
@@ -86,28 +84,6 @@ export default function SitesPage({ profile }) {
     if (result.error) setError(result.error.message);
     else fetchFullHierarchy();
   };
-
-  const showQrCode = (area, zone, site) => {
-    const manualCode = `${site.name.substring(0,3).toUpperCase()}-${zone.name.substring(0,3).toUpperCase()}-${area.name.substring(0,3).toUpperCase()}-${area.id.substring(0,4)}`;
-    setQrCodeData({
-        url: `https://pristinepoint.app/scan/${area.qr_code_id}`,
-        location: `${site.name} > ${zone.name} > ${area.name}`,
-        manualCode: manualCode
-    });
-    setIsQrModalOpen(true);
-  };
-
-  useEffect(() => {
-    if (qrCodeData) {
-        const qrContainer = document.getElementById('qrcode-container');
-        qrContainer.innerHTML = '';
-        new QRCode(qrContainer, {
-            text: qrCodeData.url,
-            width: 256,
-            height: 256,
-        });
-    }
-  }, [qrCodeData]);
 
   if (loading) return <p>Loading sites...</p>;
   if (error) return <p className="text-red-600">Error: {error}</p>;
@@ -141,13 +117,14 @@ export default function SitesPage({ profile }) {
                           {zone.areas.length > 0 ? (
                               <ul className="space-y-1">
                                   {zone.areas.map(area => (
-                                      <li key={area.id} className="flex justify-between items-center text-sm p-1">
+                                      <li key={area.id} className="flex justify-between items-center text-sm p-1 hover:bg-gray-50 rounded-md">
                                           <div>
                                               <span>{area.name}</span>
                                               {area.area_types && <span className="ml-2 text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">{area.area_types.name}</span>}
                                           </div>
+                                          {/* --- NEW: Edit and Delete buttons for each Area --- */}
                                           <div>
-                                            <button onClick={() => showQrCode(area, zone, site)} className="text-xs text-blue-500 hover:underline mr-2">Get QR</button>
+                                            <button onClick={() => setEditingArea(area)} className="text-xs text-blue-600 hover:underline mr-2">Edit</button>
                                             <button onClick={() => handleDelete('area', area.id)} className="text-xs text-red-500 hover:text-red-700">Delete</button>
                                           </div>
                                       </li>
@@ -163,6 +140,7 @@ export default function SitesPage({ profile }) {
           </div>
         </div>
         <div>
+          {/* --- Create Forms (No changes here) --- */}
           <div className="bg-white p-6 rounded-lg shadow-md mb-6">
             <h3 className="text-xl font-semibold text-gray-800 mb-4">Create New Site</h3>
             <form onSubmit={(e) => handleCreate(e, 'site')} className="space-y-4">
@@ -210,23 +188,16 @@ export default function SitesPage({ profile }) {
           )}
         </div>
       </div>
-
-      {/* QR Code Modal */}
-      {isQrModalOpen && qrCodeData && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
-          <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-sm text-center">
-            <div id="printable-qr">
-                <h3 className="text-2xl font-bold text-gray-800 mb-2">PristinePoint</h3>
-                <div id="qrcode-container" className="mb-4 p-4 border rounded-lg inline-block"></div>
-                <p className="text-gray-700 font-semibold">{qrCodeData.location}</p>
-                <p className="text-gray-600 mt-2">Manual Code:</p>
-                <p className="text-lg font-mono bg-gray-100 p-2 rounded-md mb-6">{qrCodeData.manualCode}</p>
-            </div>
-            <button onClick={() => window.print()} className="bg-blue-600 text-white px-4 py-2 rounded-md mr-2 hover:bg-blue-700">Print</button>
-            <button onClick={() => setIsQrModalOpen(false)} className="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">Close</button>
-          </div>
-        </div>
-      )}
+      
+      {/* --- NEW: Render the Edit Modal --- */}
+      <AreaEditModal
+        area={editingArea}
+        isOpen={!!editingArea}
+        onClose={() => setEditingArea(null)}
+        onUpdate={fetchFullHierarchy} // Refresh the list after an update
+        profile={profile}
+      />
     </>
   );
 }
+
