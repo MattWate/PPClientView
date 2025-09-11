@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from './services/supabaseClient.js';
+import { supabase } from '../services/supabaseClient.js';
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -110,7 +110,7 @@ export default function TasksPage({ profile }) {
     e.preventDefault();
     try {
       setError(null);
-      const { data, error: error } = await supabase
+      const { data, error } = await supabase
         .from('area_types')
         .insert({ name: newAreaTypeName.trim(), company_id: profile.company_id })
         .select('id,name, job_templates(id,description)')
