@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../../services/supabaseClient';
+import { supabase } from '../../services/supabaseClient.js';
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -7,6 +7,7 @@ export default function SchedulePanel({ user }) {
   const [schedule, setSchedule] = useState(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
   const fetchSchedule = useCallback(async () => {
     if (!user) return;
@@ -54,6 +55,7 @@ export default function SchedulePanel({ user }) {
     try {
         setLoading(true);
         setError('');
+        setSuccessMessage('');
 
         const upsertPromises = Array.from(schedule.entries()).map(([dayIndex, dayData]) => {
             return supabase.from('staff_schedules').upsert({
@@ -69,6 +71,9 @@ export default function SchedulePanel({ user }) {
         const firstError = results.find(res => res.error);
         if (firstError) throw firstError.error;
 
+        setSuccessMessage('Schedule saved successfully!');
+        setTimeout(() => setSuccessMessage(''), 3000); // Clear message after 3 seconds
+
     } catch(err) {
         setError('Failed to save schedule.');
     } finally {
@@ -76,16 +81,17 @@ export default function SchedulePanel({ user }) {
     }
   };
 
-  if (loading) return <p>Loading schedule...</p>;
+  if (loading && !schedule.size) return <p>Loading schedule...</p>;
   if (error) return <p className="text-red-500">{error}</p>
 
   return (
     <div className="border-t pt-4">
       <h4 className="text-lg font-semibold text-gray-800 mb-4">Weekly Schedule</h4>
-      <div className="space-y-3">
+      {/* --- FIX: Made this container scrollable --- */}
+      <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
         {DAYS_OF_WEEK.map((day, index) => {
           const daySchedule = schedule.get(index);
-          if (!daySchedule) return null; // Should not happen
+          if (!daySchedule) return null;
 
           return (
             <div key={index} className="grid grid-cols-4 items-center gap-4 p-2 rounded-md bg-gray-50">
@@ -95,7 +101,7 @@ export default function SchedulePanel({ user }) {
                     type="checkbox"
                     checked={daySchedule.is_active}
                     onChange={(e) => handleScheduleChange(index, 'is_active', e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300"
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
                   <span className="font-medium text-gray-700">{day}</span>
                 </label>
@@ -124,7 +130,9 @@ export default function SchedulePanel({ user }) {
           );
         })}
       </div>
-       <div className="mt-4 flex justify-end">
+      {/* --- FIX: Added success message feedback --- */}
+       <div className="mt-4 flex justify-end items-center gap-4">
+            {successMessage && <p className="text-sm text-green-600">{successMessage}</p>}
             <button
                 onClick={handleSaveSchedule}
                 disabled={loading}
