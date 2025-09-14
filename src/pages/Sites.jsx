@@ -1,81 +1,157 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../services/supabaseClient';
-import AreaEditModal from '../components/modals/AreaEditModal';
+// --- NEW: Supabase client initialization to resolve import error ---
+// NOTE: You must replace these with your actual Supabase project URL and anon key
+import { createClient } from '@supabase/supabase-js';
+const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // Replace with your Supabase URL
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // Replace with your Supabase anon key
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// --- NEW: QR Code Modal Component for printing QR codes for all areas in a zone ---
-const QRCodeModal = ({ zone, isOpen, onClose }) => {
-    if (!isOpen || !zone) return null;
 
-    // Triggers the browser's print dialog
+// --- NEW: AreaEditModal component to resolve import error ---
+const AreaEditModal = ({ area, isOpen, onClose, onUpdate, profile }) => {
+    const [name, setName] = useState('');
+    const [areaTypeId, setAreaTypeId] = useState('');
+    const [areaTypes, setAreaTypes] = useState([]);
+    const [error, setError] = useState(null);
+    const [loading, setLoading] = useState(false);
+
+    // Fetch area types for the dropdown
+    useEffect(() => {
+        if (isOpen && profile) {
+            const fetchAreaTypes = async () => {
+                const { data, error } = await supabase
+                    .from('area_types')
+                    .select('*')
+                    .eq('company_id', profile.company_id);
+                if (error) {
+                    console.error("Error fetching area types:", error);
+                } else {
+                    setAreaTypes(data || []);
+                }
+            };
+            fetchAreaTypes();
+        }
+    }, [isOpen, profile]);
+
+    // Pre-fill the form when an area is selected
+    useEffect(() => {
+        if (area) {
+            setName(area.name || '');
+            setAreaTypeId(area.area_type_id || '');
+            setError(null);
+        }
+    }, [area]);
+
+    if (!isOpen || !area) return null;
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        setError(null);
+
+        const { error: updateError } = await supabase
+            .from('areas')
+            .update({ name: name, area_type_id: areaTypeId || null })
+            .eq('id', area.id);
+
+        setLoading(false);
+        if (updateError) {
+            setError(updateError.message);
+        } else {
+            onUpdate(); // Refresh the hierarchy view
+            onClose(); // Close the modal
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full m-4 z-50">
+                <form onSubmit={handleSubmit}>
+                    <div className="p-6">
+                        <h3 className="text-xl font-semibold mb-4">Edit Area</h3>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-sm font-medium text-gray-700">Area Name</label>
+                                <input
+                                    type="text"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    required
+                                    className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-sm font-medium text-gray-700">Area Type (Optional)</label>
+                                <select
+                                    value={areaTypeId}
+                                    onChange={(e) => setAreaTypeId(e.target.value)}
+                                    className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm"
+                                >
+                                    <option value="">None</option>
+                                    {areaTypes.map(type => (
+                                        <option key={type.id} value={type.id}>{type.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            {error && <p className="text-red-600 text-sm">{error}</p>}
+                        </div>
+                    </div>
+                    <div className="flex justify-end p-4 bg-gray-50 rounded-b-lg">
+                        <button type="button" onClick={onClose} className="bg-gray-200 text-gray-700 py-2 px-4 rounded-md mr-2 hover:bg-gray-300">Cancel</button>
+                        <button type="submit" disabled={loading} className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50">
+                            {loading ? 'Saving...' : 'Save Changes'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+
+// --- QR Code Modal for a single Area ---
+const AreaQRCodeModal = ({ area, isOpen, onClose }) => {
+    if (!isOpen || !area) return null;
+
     const handlePrint = () => {
         window.print();
     };
 
     return (
         <>
-            {/* These styles are specifically for the print view. They hide the app's UI and format the QR codes for paper. */}
             <style>
                 {`
                     @media print {
-                        body > *, .modal-overlay > *:not(.modal-content-printable) {
-                            display: none !important;
-                        }
-                        .modal-overlay {
-                            background: transparent !important;
-                        }
+                        body > *, .modal-overlay > *:not(.modal-content-printable) { display: none !important; }
+                        .modal-overlay { background: transparent !important; }
                         .modal-content-printable {
-                            visibility: visible !important;
-                            position: absolute;
-                            left: 0;
-                            top: 0;
-                            width: 100%;
-                            height: 100%;
-                            overflow: visible;
-                            box-shadow: none;
-                            border: none;
+                            visibility: visible !important; position: absolute; left: 0; top: 0;
+                            width: 100%; height: 100%; overflow: visible; box-shadow: none;
+                            border: none; display: flex; justify-content: center; align-items: center;
                         }
-                        .print-hidden {
-                            display: none !important;
-                        }
-                        .qr-grid-item {
-                            break-inside: avoid; /* Prevents items from splitting across pages */
-                        }
+                        .print-hidden { display: none !important; }
                     }
                 `}
             </style>
-
-            {/* Modal Overlay */}
             <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center transition-opacity modal-overlay" onClick={onClose}>
-                {/* Modal Content */}
-                <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full m-4 max-h-[90vh] flex flex-col z-50 modal-content-printable" onClick={e => e.stopPropagation()}>
-                    {/* Header */}
+                <div className="bg-white rounded-lg shadow-xl max-w-sm w-full m-4 flex flex-col z-50 modal-content-printable" onClick={e => e.stopPropagation()}>
                     <div className="flex justify-between items-center p-4 border-b print-hidden">
-                        <h3 className="text-xl font-semibold">Print QR Codes for "{zone.name}"</h3>
+                        <h3 className="text-xl font-semibold">QR Code for "{area.name}"</h3>
                         <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
                     </div>
-                    
-                    {/* Body - Scrollable and contains the printable content */}
-                    <div className="overflow-y-auto p-6" id="printable-qr-codes">
-                        <div className="text-center mb-6">
-                            <h2 className="text-2xl font-bold">Zone: {zone.name}</h2>
-                            <h3 className="text-lg font-medium text-gray-600">Site: {zone.siteName}</h3>
+                    <div className="p-6 flex flex-col items-center" id="printable-qr-code">
+                        <div className="text-center mb-4">
+                            <h2 className="text-2xl font-bold">{area.name}</h2>
+                            <p className="text-lg text-gray-600">Zone: {area.zoneName}</p>
+                            <p className="text-md text-gray-500">Site: {area.siteName}</p>
                         </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
-                            {(zone.areas || []).map(area => (
-                                <div key={area.id} className="text-center flex flex-col items-center p-2 border rounded-lg qr-grid-item">
-                                    <img
-                                        src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://pristinepoint.app/task/area/${area.id}`}
-                                        alt={`QR Code for ${area.name}`}
-                                        className="w-32 h-32 object-contain"
-                                    />
-                                    <p className="mt-2 font-semibold text-gray-800 break-words">{area.name}</p>
-                                    {area.area_types && <p className="text-xs text-gray-500">{area.area_types.name}</p>}
-                                </div>
-                            ))}
-                        </div>
+                        <img
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=https://pristinepoint.app/task/area/${area.id}`}
+                            alt={`QR Code for ${area.name}`}
+                            className="w-64 h-64 object-contain"
+                        />
+                         <p className="mt-2 text-xs text-gray-500">ID: {area.id}</p>
                     </div>
-
-                    {/* Footer with actions */}
                     <div className="flex justify-end p-4 border-t print-hidden">
                         <button onClick={onClose} className="bg-gray-200 text-gray-700 py-2 px-4 rounded-md mr-2 hover:bg-gray-300">Close</button>
                         <button onClick={handlePrint} className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700">Print</button>
@@ -100,10 +176,8 @@ export default function SitesPage({ profile }) {
   const [activeSiteId, setActiveSiteId] = useState(null);
   const [activeZoneId, setActiveZoneId] = useState(null);
 
-  // --- State for the Area Edit Modal ---
   const [editingArea, setEditingArea] = useState(null);
-  // --- State for the QR Code Modal ---
-  const [qrModalZone, setQrModalZone] = useState(null);
+  const [qrModalArea, setQrModalArea] = useState(null);
 
   const fetchFullHierarchy = useCallback(async () => {
     if (!profile) return;
@@ -161,7 +235,10 @@ export default function SitesPage({ profile }) {
   };
   
   const handleDelete = async (type, id) => {
+    // A simple window.confirm is used here. For a better user experience,
+    // you might want to replace this with a custom confirmation modal.
     if (!window.confirm(`Are you sure you want to delete this ${type}? This action cannot be undone.`)) return;
+    
     let result;
     if (type === 'site') result = await supabase.from('sites').delete().eq('id', id);
     else if (type === 'zone') result = await supabase.from('zones').delete().eq('id', id);
@@ -195,7 +272,6 @@ export default function SitesPage({ profile }) {
                        <div className="w-full flex justify-between items-center p-3 bg-gray-100">
                           <span className="font-medium text-gray-700">{zone.name}</span>
                           <div>
-                            <button onClick={() => setQrModalZone({...zone, siteName: site.name })} className="text-xs bg-purple-500 hover:bg-purple-600 text-white py-1 px-2 rounded-md mr-2">Print QRs</button>
                             <button onClick={() => { setActiveSiteId(site.id); setActiveZoneId(zone.id); }} className="text-xs bg-green-500 hover:bg-green-600 text-white py-1 px-2 rounded-md mr-2">Add Area</button>
                             <button onClick={() => handleDelete('zone', zone.id)} className="text-xs bg-red-500 hover:bg-red-600 text-white py-1 px-2 rounded-md">Delete Zone</button>
                           </div>
@@ -209,8 +285,9 @@ export default function SitesPage({ profile }) {
                                               <span>{area.name}</span>
                                               {area.area_types && <span className="ml-2 text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">{area.area_types.name}</span>}
                                           </div>
-                                          <div>
-                                            <button onClick={() => setEditingArea(area)} className="text-xs text-blue-600 hover:underline mr-2">Edit</button>
+                                          <div className="flex items-center">
+                                            <button onClick={() => setQrModalArea({ ...area, zoneName: zone.name, siteName: site.name })} className="text-xs font-semibold text-purple-600 hover:underline mr-3">QR</button>
+                                            <button onClick={() => setEditingArea(area)} className="text-xs text-blue-600 hover:underline mr-3">Edit</button>
                                             <button onClick={() => handleDelete('area', area.id)} className="text-xs text-red-500 hover:text-red-700">Delete</button>
                                           </div>
                                       </li>
@@ -282,10 +359,10 @@ export default function SitesPage({ profile }) {
         profile={profile}
       />
 
-      <QRCodeModal
-        zone={qrModalZone}
-        isOpen={!!qrModalZone}
-        onClose={() => setQrModalZone(null)}
+      <AreaQRCodeModal
+        area={qrModalArea}
+        isOpen={!!qrModalArea}
+        onClose={() => setQrModalArea(null)}
       />
     </>
   );
