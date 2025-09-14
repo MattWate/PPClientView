@@ -1,12 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
-
-// --- Supabase Client Initialization ---
-// This is included to make the component self-contained and resolve the import error.
-// NOTE: You must replace these with your actual Supabase project URL and anon key.
-const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // Replace with your Supabase URL
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // Replace with your Supabase anon key
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+import { supabase } from '../services/supabaseClient';
 
 
 // --- Task Assignment Modal ---
