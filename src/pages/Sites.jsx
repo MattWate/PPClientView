@@ -1,6 +1,90 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../services/supabaseClient';
-import AreaEditModal from '../components/modals/AreaEditModal'; // We'll create this next
+import AreaEditModal from '../components/modals/AreaEditModal';
+
+// --- NEW: QR Code Modal Component for printing QR codes for all areas in a zone ---
+const QRCodeModal = ({ zone, isOpen, onClose }) => {
+    if (!isOpen || !zone) return null;
+
+    // Triggers the browser's print dialog
+    const handlePrint = () => {
+        window.print();
+    };
+
+    return (
+        <>
+            {/* These styles are specifically for the print view. They hide the app's UI and format the QR codes for paper. */}
+            <style>
+                {`
+                    @media print {
+                        body > *, .modal-overlay > *:not(.modal-content-printable) {
+                            display: none !important;
+                        }
+                        .modal-overlay {
+                            background: transparent !important;
+                        }
+                        .modal-content-printable {
+                            visibility: visible !important;
+                            position: absolute;
+                            left: 0;
+                            top: 0;
+                            width: 100%;
+                            height: 100%;
+                            overflow: visible;
+                            box-shadow: none;
+                            border: none;
+                        }
+                        .print-hidden {
+                            display: none !important;
+                        }
+                        .qr-grid-item {
+                            break-inside: avoid; /* Prevents items from splitting across pages */
+                        }
+                    }
+                `}
+            </style>
+
+            {/* Modal Overlay */}
+            <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center transition-opacity modal-overlay" onClick={onClose}>
+                {/* Modal Content */}
+                <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full m-4 max-h-[90vh] flex flex-col z-50 modal-content-printable" onClick={e => e.stopPropagation()}>
+                    {/* Header */}
+                    <div className="flex justify-between items-center p-4 border-b print-hidden">
+                        <h3 className="text-xl font-semibold">Print QR Codes for "{zone.name}"</h3>
+                        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+                    </div>
+                    
+                    {/* Body - Scrollable and contains the printable content */}
+                    <div className="overflow-y-auto p-6" id="printable-qr-codes">
+                        <div className="text-center mb-6">
+                            <h2 className="text-2xl font-bold">Zone: {zone.name}</h2>
+                            <h3 className="text-lg font-medium text-gray-600">Site: {zone.siteName}</h3>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
+                            {(zone.areas || []).map(area => (
+                                <div key={area.id} className="text-center flex flex-col items-center p-2 border rounded-lg qr-grid-item">
+                                    <img
+                                        src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://pristinepoint.app/task/area/${area.id}`}
+                                        alt={`QR Code for ${area.name}`}
+                                        className="w-32 h-32 object-contain"
+                                    />
+                                    <p className="mt-2 font-semibold text-gray-800 break-words">{area.name}</p>
+                                    {area.area_types && <p className="text-xs text-gray-500">{area.area_types.name}</p>}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Footer with actions */}
+                    <div className="flex justify-end p-4 border-t print-hidden">
+                        <button onClick={onClose} className="bg-gray-200 text-gray-700 py-2 px-4 rounded-md mr-2 hover:bg-gray-300">Close</button>
+                        <button onClick={handlePrint} className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700">Print</button>
+                    </div>
+                </div>
+            </div>
+        </>
+    );
+};
 
 export default function SitesPage({ profile }) {
   const [sites, setSites] = useState([]);
@@ -16,8 +100,10 @@ export default function SitesPage({ profile }) {
   const [activeSiteId, setActiveSiteId] = useState(null);
   const [activeZoneId, setActiveZoneId] = useState(null);
 
-  // --- NEW: State for the Area Edit Modal ---
+  // --- State for the Area Edit Modal ---
   const [editingArea, setEditingArea] = useState(null);
+  // --- State for the QR Code Modal ---
+  const [qrModalZone, setQrModalZone] = useState(null);
 
   const fetchFullHierarchy = useCallback(async () => {
     if (!profile) return;
@@ -25,7 +111,7 @@ export default function SitesPage({ profile }) {
       setLoading(true);
       const { data, error } = await supabase
         .from('sites')
-        .select('*, zones(*, areas(*, area_types(id, name)))') // Include area_type id
+        .select('*, zones(*, areas(*, area_types(id, name)))')
         .eq('company_id', profile.company_id);
 
       if (error) throw error;
@@ -109,8 +195,9 @@ export default function SitesPage({ profile }) {
                        <div className="w-full flex justify-between items-center p-3 bg-gray-100">
                           <span className="font-medium text-gray-700">{zone.name}</span>
                           <div>
-                              <button onClick={() => { setActiveSiteId(site.id); setActiveZoneId(zone.id); }} className="text-xs bg-green-500 hover:bg-green-600 text-white py-1 px-2 rounded-md mr-2">Add Area</button>
-                              <button onClick={() => handleDelete('zone', zone.id)} className="text-xs bg-red-500 hover:bg-red-600 text-white py-1 px-2 rounded-md">Delete Zone</button>
+                            <button onClick={() => setQrModalZone({...zone, siteName: site.name })} className="text-xs bg-purple-500 hover:bg-purple-600 text-white py-1 px-2 rounded-md mr-2">Print QRs</button>
+                            <button onClick={() => { setActiveSiteId(site.id); setActiveZoneId(zone.id); }} className="text-xs bg-green-500 hover:bg-green-600 text-white py-1 px-2 rounded-md mr-2">Add Area</button>
+                            <button onClick={() => handleDelete('zone', zone.id)} className="text-xs bg-red-500 hover:bg-red-600 text-white py-1 px-2 rounded-md">Delete Zone</button>
                           </div>
                        </div>
                        <div className="p-3">
@@ -122,7 +209,6 @@ export default function SitesPage({ profile }) {
                                               <span>{area.name}</span>
                                               {area.area_types && <span className="ml-2 text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">{area.area_types.name}</span>}
                                           </div>
-                                          {/* --- NEW: Edit and Delete buttons for each Area --- */}
                                           <div>
                                             <button onClick={() => setEditingArea(area)} className="text-xs text-blue-600 hover:underline mr-2">Edit</button>
                                             <button onClick={() => handleDelete('area', area.id)} className="text-xs text-red-500 hover:text-red-700">Delete</button>
@@ -140,7 +226,6 @@ export default function SitesPage({ profile }) {
           </div>
         </div>
         <div>
-          {/* --- Create Forms (No changes here) --- */}
           <div className="bg-white p-6 rounded-lg shadow-md mb-6">
             <h3 className="text-xl font-semibold text-gray-800 mb-4">Create New Site</h3>
             <form onSubmit={(e) => handleCreate(e, 'site')} className="space-y-4">
@@ -189,13 +274,18 @@ export default function SitesPage({ profile }) {
         </div>
       </div>
       
-      {/* --- NEW: Render the Edit Modal --- */}
       <AreaEditModal
         area={editingArea}
         isOpen={!!editingArea}
         onClose={() => setEditingArea(null)}
-        onUpdate={fetchFullHierarchy} // Refresh the list after an update
+        onUpdate={fetchFullHierarchy}
         profile={profile}
+      />
+
+      <QRCodeModal
+        zone={qrModalZone}
+        isOpen={!!qrModalZone}
+        onClose={() => setQrModalZone(null)}
       />
     </>
   );
