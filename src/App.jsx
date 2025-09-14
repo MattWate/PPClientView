@@ -1,10 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from './contexts/AuthContext.jsx';
-import { supabase } from './services/supabaseClient.js';
-import PublicHomePage from './pages/PublicHomePage.jsx';
-import AdminLayout from './layouts/AdminLayout.jsx';
-import SupervisorLayout from './layouts/SupervisorLayout.jsx';
-import CleanerLayout from './layouts/CleanerLayout.jsx';
+import { Routes, Route } from 'react-router-dom';
+import { useAuth } from './contexts/AuthContext';
+import { supabase } from './services/supabaseClient';
+
+// Import Pages & Layouts
+import PublicHomePage from './pages/PublicHomePage';
+import AdminLayout from './layouts/AdminLayout';
+import SupervisorLayout from './layouts/SupervisorLayout';
+import CleanerLayout from './layouts/CleanerLayout';
+import ScanHandlerPage from './pages/ScanHandlerPage';
+
+// --- Placeholder Components ---
+// We will build these out in the next steps.
+const PublicScanPage = () => <div className="p-4">Public Scan Page for a specific area</div>;
+const CleanerAreaView = () => <div className="p-4">Cleaner's View for a specific area</div>;
+const SupervisorAreaView = () => <div className="p-4">Supervisor's View for a specific area</div>;
+
 
 // Minimal loading screen
 const LoadingScreen = () => (
@@ -13,26 +24,28 @@ const LoadingScreen = () => (
   </div>
 );
 
-// Error boundary that falls back to the landing page on any layout error
-class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { error: null };
+// This component contains the original logic from App.jsx to show the correct dashboard
+const MainDashboard = ({ session, profile }) => {
+  const role = (profile?.role ?? '').toString().trim().toLowerCase();
+  
+  if (!role) {
+    // This can happen briefly between login and profile fetch.
+    return <PublicHomePage />;
   }
-  static getDerivedStateFromError(error) {
-    return { error };
-  }
-  componentDidCatch(error, info) {
-    // Optional: log to your monitoring here
-    console.error('Layout error:', error, info);
-  }
-  render() {
-    if (this.state.error) {
+  
+  switch (role) {
+    case 'admin':
+      return <AdminLayout session={session} profile={profile} />;
+    case 'supervisor':
+      return <SupervisorLayout session={session} profile={profile} />;
+    case 'cleaner':
+      return <CleanerLayout session={session} profile={profile} />;
+    default:
+      // If role is unknown, default to a safe view.
       return <PublicHomePage />;
-    }
-    return this.props.children;
   }
-}
+};
+
 
 export default function App() {
   const { session, loading: authLoading } = useAuth();
@@ -41,9 +54,7 @@ export default function App() {
 
   useEffect(() => {
     let isMounted = true;
-
     const fetchProfile = async () => {
-      // No session: show landing
       if (!session?.user?.id) {
         if (isMounted) {
           setProfile(null);
@@ -52,7 +63,6 @@ export default function App() {
         return;
       }
 
-      // IMPORTANT: set loading true whenever we (re)fetch with a session
       if (isMounted) setProfileLoading(true);
 
       try {
@@ -60,7 +70,7 @@ export default function App() {
           .from('profiles')
           .select('id, full_name, role, company_id')
           .eq('id', session.user.id)
-          .maybeSingle(); // safer than .single() if 0 rows
+          .maybeSingle();
 
         if (error) throw error;
         if (isMounted) setProfile(userProfile || null);
@@ -76,28 +86,35 @@ export default function App() {
     return () => { isMounted = false; };
   }, [session]);
 
-  // Gates
-  if (authLoading || (session && profileLoading)) return <LoadingScreen />;
-
-  // No session → landing page
-  if (!session) return <PublicHomePage />;
-
-  // Normalize role; missing/unknown role → landing page
-  const role = (profile?.role ?? '').toString().trim().toLowerCase();
-  if (!role) return <PublicHomePage />;
-
-  // Choose layout; fallback to landing if unknown
-  let layout = null;
-  if (role === 'admin') {
-    layout = <AdminLayout session={session} profile={profile} />;
-  } else if (role === 'supervisor') {
-    layout = <SupervisorLayout session={session} profile={profile} />;
-  } else if (role === 'cleaner') {
-    layout = <CleanerLayout session={session} profile={profile} />;
-  } else {
-    return <PublicHomePage />;
+  if (authLoading) {
+    return <LoadingScreen />;
   }
 
-  // Catch any runtime errors in the chosen layout and fallback to landing
-  return <ErrorBoundary>{layout}</ErrorBoundary>;
+  return (
+    <Routes>
+      {/* Main Route: decides whether to show login or the correct dashboard */}
+      <Route
+        path="/"
+        element={
+          !session ? (
+            <PublicHomePage />
+          ) : profileLoading ? (
+            <LoadingScreen />
+          ) : (
+            <MainDashboard session={session} profile={profile} />
+          )
+        }
+      />
+
+      {/* QR Code Scan Handler Route */}
+      <Route path="/scan/:areaId" element={<ScanHandlerPage />} />
+
+      {/* Placeholder routes for the pages our ScanHandler will redirect to */}
+      <Route path="/public-scan/:areaId" element={<PublicScanPage />} />
+      <Route path="/cleaner-view/:areaId" element={<CleanerAreaView />} />
+      <Route path="/supervisor-view/:areaId" element={<SupervisorAreaView />} />
+
+    </Routes>
+  );
 }
+
