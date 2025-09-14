@@ -1,146 +1,106 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
-import { supabase } from '../services/supabaseClient'; // Or the correct path
 
+// --- Supabase Client Initialization ---
+// NOTE: You must replace these with your actual Supabase project URL and anon key
+const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // Replace with your Supabase URL
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // Replace with your Supabase anon key
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// --- Task Detail Modal Component ---
-// This modal opens when a supervisor clicks on a task card.
-const TaskDetailModal = ({ task, isOpen, onClose, onTaskUpdate, profile }) => {
-    const [cleaners, setCleaners] = useState([]);
-    const [selectedCleanerId, setSelectedCleanerId] = useState('');
+// --- Area Assignment Modal ---
+// This modal allows a supervisor to assign/unassign cleaners from a specific area.
+const AreaAssignmentModal = ({ area, isOpen, onClose, onUpdate, allCleaners, assignedCleanerIds }) => {
+    const [selectedCleanerIds, setSelectedCleanerIds] = useState(assignedCleanerIds || []);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
 
-    // Fetch available cleaners when the modal opens for reassignment
     useEffect(() => {
-        if (isOpen && profile) {
-            const fetchCleaners = async () => {
-                const { data, error } = await supabase
-                    .from('profiles')
-                    .select('id, full_name')
-                    .eq('company_id', profile.company_id)
-                    .eq('role', 'cleaner');
-                if (error) {
-                    console.error("Error fetching cleaners:", error);
-                } else {
-                    setCleaners(data || []);
-                }
-            };
-            fetchCleaners();
-        }
-    }, [isOpen, profile]);
+        setSelectedCleanerIds(assignedCleanerIds || []);
+    }, [assignedCleanerIds]);
 
-    // Reset state when the task changes
-    useEffect(() => {
-        if (task) {
-            setSelectedCleanerId('');
-            setError('');
-        }
-    }, [task]);
+    if (!isOpen || !area) return null;
 
-    if (!isOpen || !task) return null;
-
-    const handleVerifyTask = async () => {
-        setIsSubmitting(true);
-        setError('');
-        const { error } = await supabase
-            .from('tasks')
-            .update({ status: 'verified', verified_by: profile.id, verified_at: new Date().toISOString() })
-            .eq('id', task.id);
-
-        if (error) {
-            setError('Failed to verify task. Please try again.');
-            console.error(error);
-        } else {
-            onTaskUpdate(); // Refresh the dashboard
-            onClose();
-        }
-        setIsSubmitting(false);
+    const handleCleanerToggle = (cleanerId) => {
+        setSelectedCleanerIds(prev =>
+            prev.includes(cleanerId) ? prev.filter(id => id !== cleanerId) : [...prev, cleanerId]
+        );
     };
 
-    const handleReassignTask = async () => {
-        if (!selectedCleanerId) {
-            setError('Please select a cleaner to reassign the task to.');
-            return;
-        }
+    const handleSaveAssignments = async () => {
         setIsSubmitting(true);
         setError('');
-        const { error } = await supabase
-            .from('tasks')
-            .update({ assigned_to: selectedCleanerId, status: 'assigned' })
-            .eq('id', task.id);
 
-        if (error) {
-            setError('Failed to reassign task. Please try again.');
-        } else {
-            onTaskUpdate();
+        try {
+            // First, remove all existing assignments for this area to handle unassignments
+            const { error: deleteError } = await supabase
+                .from('area_assignments')
+                .delete()
+                .eq('area_id', area.id);
+
+            if (deleteError) throw deleteError;
+
+            // Now, insert the new set of assignments
+            if (selectedCleanerIds.length > 0) {
+                const newAssignments = selectedCleanerIds.map(userId => ({
+                    area_id: area.id,
+                    user_id: userId,
+                    // company_id can be useful for RLS policies
+                    company_id: area.zones.sites.company_id
+                }));
+
+                const { error: insertError } = await supabase
+                    .from('area_assignments')
+                    .insert(newAssignments);
+
+                if (insertError) throw insertError;
+            }
+            onUpdate(); // Refresh the main dashboard
             onClose();
+        } catch (err) {
+            setError('Failed to save assignments. Please try again.');
+            console.error(err);
+        } finally {
+            setIsSubmitting(false);
         }
-        setIsSubmitting(false);
     };
-
+    
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 z-40 flex justify-center items-center" onClick={onClose}>
             <div className="bg-white rounded-lg shadow-xl max-w-lg w-full m-4 z-50" onClick={e => e.stopPropagation()}>
                 <div className="p-6 border-b">
-                    <h3 className="text-xl font-bold">{task.job_templates?.description || 'Task Details'}</h3>
-                    <p className="text-sm text-gray-600">
-                        {task.sites?.name} &gt; {task.zones?.name} &gt; {task.areas?.name}
-                    </p>
+                    <h3 className="text-xl font-bold">Assign Cleaners to: {area.name}</h3>
+                    <p className="text-sm text-gray-500">{area.zones.sites.name} &gt; {area.zones.name}</p>
                 </div>
-                <div className="p-6 space-y-4">
-                    <div>
-                        <span className="font-semibold">Status: </span>
-                        <span className={`px-2 py-0.5 text-xs font-semibold rounded-full capitalize ${
-                            task.status === 'completed' || task.status === 'verified' ? 'bg-green-100 text-green-800' :
-                            task.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-gray-100 text-gray-800'
-                        }`}>
-                            {task.status ? task.status.replace('_', ' ') : 'pending'}
-                        </span>
-                    </div>
-
-                    {/* Verification Section */}
-                    {task.status === 'completed' && (
-                        <div className="p-4 bg-blue-50 rounded-md">
-                            <p className="text-blue-800 font-semibold mb-2">This task is ready for verification.</p>
-                            <button
-                                onClick={handleVerifyTask}
-                                disabled={isSubmitting}
-                                className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 disabled:opacity-50"
-                            >
-                                {isSubmitting ? 'Verifying...' : 'Verify & Close Task'}
-                            </button>
-                        </div>
+                <div className="p-6 space-y-3" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+                    <h4 className="font-semibold">Available Cleaners</h4>
+                    {allCleaners.length > 0 ? (
+                        allCleaners.map(cleaner => (
+                            <div key={cleaner.id} className="flex items-center justify-between p-2 rounded-md hover:bg-gray-100">
+                                <label htmlFor={`cleaner-${cleaner.id}`} className="flex-grow cursor-pointer">{cleaner.full_name}</label>
+                                <input
+                                    type="checkbox"
+                                    id={`cleaner-${cleaner.id}`}
+                                    checked={selectedCleanerIds.includes(cleaner.id)}
+                                    onChange={() => handleCleanerToggle(cleaner.id)}
+                                    className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                />
+                            </div>
+                        ))
+                    ) : (
+                        <p className="text-gray-500">No cleaners available in this company.</p>
                     )}
-
-                    {/* Reassignment Section */}
-                    <div className="pt-4 border-t">
-                        <h4 className="font-semibold mb-2">Reassign Task</h4>
-                        <select
-                            value={selectedCleanerId}
-                            onChange={(e) => setSelectedCleanerId(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
-                        >
-                            <option value="">Select a Cleaner...</option>
-                            {cleaners.map(cleaner => (
-                                <option key={cleaner.id} value={cleaner.id}>{cleaner.full_name}</option>
-                            ))}
-                        </select>
-                        <button
-                            onClick={handleReassignTask}
-                            disabled={isSubmitting || !selectedCleanerId}
-                            className="w-full mt-2 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50"
-                        >
-                            {isSubmitting ? 'Reassigning...' : 'Reassign'}
-                        </button>
-                    </div>
-
-                    {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
                 </div>
-                <div className="flex justify-end p-4 bg-gray-50 rounded-b-lg">
+                <div className="flex justify-between items-center p-4 bg-gray-50 rounded-b-lg">
+                    {error && <p className="text-red-600 text-sm">{error}</p>}
                     <button onClick={onClose} className="bg-gray-200 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-300">
-                        Close
+                        Cancel
+                    </button>
+                    <button
+                        onClick={handleSaveAssignments}
+                        disabled={isSubmitting}
+                        className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                    >
+                        {isSubmitting ? 'Saving...' : 'Save Assignments'}
                     </button>
                 </div>
             </div>
@@ -148,119 +108,157 @@ const TaskDetailModal = ({ task, isOpen, onClose, onTaskUpdate, profile }) => {
     );
 };
 
-// --- Task Card Component ---
-const TaskCard = ({ task, onSelectTask }) => (
-  <button
-    onClick={() => onSelectTask(task)}
-    className="bg-white p-4 rounded-lg shadow-md border border-gray-200 text-left w-full h-full flex flex-col justify-between hover:shadow-lg hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-  >
-    <div>
-        <h4 className="font-bold text-lg text-gray-800">{task.job_templates?.description || 'Unnamed Task'}</h4>
-        <p className="text-sm text-gray-600">Site: {task.sites?.name || 'N/A'}</p>
-        <p className="text-sm text-gray-600">Zone: {task.zones?.name || 'N/A'}</p>
-        <p className="text-sm text-gray-600">Area: {task.areas?.name || 'N/A'}</p>
-    </div>
-    <div className="mt-3 pt-3 border-t">
-        <span className={`px-3 py-1 text-xs font-semibold rounded-full capitalize ${
-            task.status === 'completed' || task.status === 'verified' ? 'bg-green-100 text-green-800' :
-            task.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
-            'bg-gray-100 text-gray-800'
-        }`}>
-            {task.status ? task.status.replace('_', ' ') : 'pending'}
-        </span>
-    </div>
-  </button>
-);
-
 
 // --- Main Supervisor Dashboard Component ---
 export default function SupervisorDashboard({ profile }) {
-  const [tasks, setTasks] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [selectedTask, setSelectedTask] = useState(null);
+    const [zones, setZones] = useState([]);
+    const [cleaners, setCleaners] = useState([]);
+    const [assignments, setAssignments] = useState({}); // { area_id: [user_id, ...], ... }
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [selectedArea, setSelectedArea] = useState(null);
 
-  const fetchSupervisorData = useCallback(async () => {
-    if (!profile) return;
-    try {
-      setLoading(true);
-      setError(null);
-      const { data: assignedZones, error: zonesError } = await supabase
-        .from('zone_assignments')
-        .select('zone_id')
-        .eq('user_id', profile.id);
+    const fetchData = useCallback(async () => {
+        if (!profile) return;
+        try {
+            setLoading(true);
+            setError(null);
 
-      if (zonesError) throw zonesError;
-      
-      const zoneIds = assignedZones.map(z => z.zone_id);
+            // 1. Get zones assigned to the supervisor
+            const { data: assignedZones, error: zonesError } = await supabase
+                .from('zone_assignments')
+                .select('zones(*, sites(*))')
+                .eq('user_id', profile.id);
+            if (zonesError) throw zonesError;
 
-      if (zoneIds.length === 0) {
-        setTasks([]);
-        setLoading(false);
-        return;
-      }
+            const supervisorZones = assignedZones.map(z => z.zones);
+            const zoneIds = supervisorZones.map(z => z.id);
 
-      const { data: taskData, error: tasksError } = await supabase
-        .from('tasks')
-        .select(`
-          id,
-          status,
-          assigned_to,
-          job_templates ( description ), 
-          sites ( name ),
-          zones ( name ),
-          areas ( name )
-        `)
-        .in('zone_id', zoneIds);
+            if (zoneIds.length === 0) {
+                setZones([]);
+                setLoading(false);
+                return;
+            }
 
-      if (tasksError) throw tasksError;
-      
-      setTasks(taskData || []);
+            // 2. Get all areas within those zones
+            const { data: areasData, error: areasError } = await supabase
+                .from('areas')
+                .select('*')
+                .in('zone_id', zoneIds);
+            if (areasError) throw areasError;
 
-    } catch (error) {
-      console.error("Error fetching supervisor data:", error);
-      setError(error.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [profile]);
+            // Group areas by zone_id
+            const areasByZone = areasData.reduce((acc, area) => {
+                if (!acc[area.zone_id]) acc[area.zone_id] = [];
+                acc[area.zone_id].push(area);
+                return acc;
+            }, {});
 
-  useEffect(() => {
-    fetchSupervisorData();
-  }, [fetchSupervisorData]);
+            const zonesWithAreas = supervisorZones.map(zone => ({
+                ...zone,
+                areas: areasByZone[zone.id] || []
+            }));
+            setZones(zonesWithAreas);
 
-  if (loading) {
-    return <div className="p-6"><p>Loading dashboard...</p></div>;
-  }
+            // 3. Get all cleaners in the company
+            const { data: cleanersData, error: cleanersError } = await supabase
+                .from('profiles')
+                .select('id, full_name')
+                .eq('company_id', profile.company_id)
+                .eq('role', 'cleaner');
+            if (cleanersError) throw cleanersError;
+            setCleaners(cleanersData || []);
 
-  if (error) {
-    return <div className="p-6 text-red-600"><p>Error: {error}</p></div>;
-  }
+            // 4. Get all current area assignments for the areas in the supervisor's zones
+            const areaIds = areasData.map(a => a.id);
+            if (areaIds.length > 0) {
+                 const { data: assignmentData, error: assignmentError } = await supabase
+                    .from('area_assignments')
+                    .select('area_id, user_id')
+                    .in('area_id', areaIds);
+                 if (assignmentError) throw assignmentError;
 
-  return (
-    <>
-      <div className="p-6 bg-gray-50 min-h-screen">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">Supervisor Dashboard</h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {tasks.length > 0 ? (
-            tasks.map(task => <TaskCard key={task.id} task={task} onSelectTask={setSelectedTask} />)
-          ) : (
-            <div className="md:col-span-2 lg:col-span-3 xl:col-span-4 bg-white p-6 rounded-lg shadow-md text-center">
-              <p className="text-gray-600">No tasks found for your assigned zones.</p>
+                 const assignmentsByArea = (assignmentData || []).reduce((acc, assign) => {
+                     if (!acc[assign.area_id]) acc[assign.area_id] = [];
+                     acc[assign.area_id].push(assign.user_id);
+                     return acc;
+                 }, {});
+                 setAssignments(assignmentsByArea);
+            }
+
+        } catch (err) {
+            console.error("Error fetching supervisor data:", err);
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    }, [profile]);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
+    const getCleanerName = (id) => cleaners.find(c => c.id === id)?.full_name || 'Unknown Cleaner';
+
+    if (loading) return <div className="p-6">Loading dashboard...</div>;
+    if (error) return <div className="p-6 text-red-600">Error: {error}</div>;
+
+    return (
+        <>
+            <div className="p-6 bg-gray-50 min-h-screen">
+                <h2 className="text-2xl font-bold text-gray-800 mb-6">Area & Staff Management</h2>
+                <div className="space-y-8">
+                    {zones.length > 0 ? zones.map(zone => (
+                        <div key={zone.id} className="bg-white p-4 rounded-lg shadow-md border">
+                            <h3 className="text-xl font-semibold mb-1">{zone.name}</h3>
+                            <p className="text-sm text-gray-500 mb-4">Site: {zone.sites.name}</p>
+                            <div className="space-y-4">
+                                {zone.areas.length > 0 ? zone.areas.map(area => (
+                                    <div key={area.id} className="border rounded-md p-4 bg-gray-50">
+                                        <div className="flex justify-between items-center">
+                                            <p className="font-semibold text-gray-800">{area.name}</p>
+                                            <button 
+                                                onClick={() => setSelectedArea(area)}
+                                                className="bg-blue-500 text-white py-1 px-3 text-sm rounded-md hover:bg-blue-600"
+                                            >
+                                                Manage Assignments
+                                            </button>
+                                        </div>
+                                        <div className="mt-2 pl-4 border-l-2">
+                                            <h5 className="text-xs font-bold text-gray-500 uppercase mb-1">Assigned Cleaners</h5>
+                                            {(assignments[area.id] && assignments[area.id].length > 0) ? (
+                                                <ul className="list-disc pl-5 space-y-1">
+                                                    {assignments[area.id].map(cleanerId => (
+                                                        <li key={cleanerId} className="text-sm text-gray-700">{getCleanerName(cleanerId)}</li>
+                                                    ))}
+                                                </ul>
+                                            ) : (
+                                                <p className="text-xs text-gray-500 italic">No cleaners assigned.</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                )) : (
+                                    <p className="text-sm text-gray-500">No areas found in this zone.</p>
+                                )}
+                            </div>
+                        </div>
+                    )) : (
+                        <div className="bg-white p-6 rounded-lg shadow-md text-center">
+                            <p className="text-gray-600">You are not assigned to any zones.</p>
+                        </div>
+                    )}
+                </div>
             </div>
-          )}
-        </div>
-      </div>
 
-      <TaskDetailModal
-        task={selectedTask}
-        isOpen={!!selectedTask}
-        onClose={() => setSelectedTask(null)}
-        onTaskUpdate={fetchSupervisorData}
-        profile={profile}
-      />
-    </>
-  );
+            <AreaAssignmentModal
+                area={selectedArea ? { ...selectedArea, zones: zones.find(z => z.id === selectedArea.zone_id) } : null}
+                isOpen={!!selectedArea}
+                onClose={() => setSelectedArea(null)}
+                onUpdate={fetchData}
+                allCleaners={cleaners}
+                assignedCleanerIds={selectedArea ? assignments[selectedArea.id] : []}
+            />
+        </>
+    );
 }
 
