@@ -51,7 +51,6 @@ const AreaEditModal = ({ area, isOpen, onClose, onUpdate, profile }) => {
         setLoading(true);
         setError(null);
 
-        // --- FIX: Remove .single() and handle the array response ---
         const { data: updatedAreas, error: updateError } = await supabase
             .from('areas')
             .update({
@@ -60,13 +59,12 @@ const AreaEditModal = ({ area, isOpen, onClose, onUpdate, profile }) => {
                 daily_cleaning_frequency: dailyCleaningFrequency
             })
             .eq('id', area.id)
-            .select();
+            .select('*, area_types(id, name)');
 
         setLoading(false);
         if (updateError) {
             setError(updateError.message);
         } else {
-            // --- FIX: Take the first item from the returned array ---
             if (updatedAreas && updatedAreas.length > 0) {
                 onUpdate(updatedAreas[0]);
                 onClose();
