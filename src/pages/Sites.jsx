@@ -51,26 +51,34 @@ const AreaEditModal = ({ area, isOpen, onClose, onUpdate, profile }) => {
         setLoading(true);
         setError(null);
 
-        const { data: updatedAreas, error: updateError } = await supabase
+        const updatePayload = {
+            name: name,
+            area_type_id: areaTypeId || null,
+            daily_cleaning_frequency: dailyCleaningFrequency
+        };
+
+        // --- FIX: Remove the .select() call. We will update the UI optimistically. ---
+        const { error: updateError } = await supabase
             .from('areas')
-            .update({
-                name: name,
-                area_type_id: areaTypeId || null,
-                daily_cleaning_frequency: dailyCleaningFrequency
-            })
-            .eq('id', area.id)
-            .select('*, area_types(id, name)');
+            .update(updatePayload)
+            .eq('id', area.id);
 
         setLoading(false);
+
         if (updateError) {
             setError(updateError.message);
         } else {
-            if (updatedAreas && updatedAreas.length > 0) {
-                onUpdate(updatedAreas[0]);
-                onClose();
-            } else {
-                setError("Could not verify the update. Please refresh the page.");
-            }
+            // --- FIX: Construct the updated object locally to ensure the UI updates correctly ---
+            const updatedAreaType = areaTypes.find(t => t.id === areaTypeId);
+            
+            const locallyUpdatedArea = {
+                ...area,
+                ...updatePayload,
+                area_types: updatedAreaType || null
+            };
+
+            onUpdate(locallyUpdatedArea);
+            onClose();
         }
     };
 
@@ -246,7 +254,6 @@ export default function SitesPage({ profile }) {
         }
     };
 
-    // --- NEW: Handler to update local state without a full re-fetch ---
     const handleAreaUpdate = (updatedArea) => {
         setSites(currentSites =>
             currentSites.map(site => ({
@@ -255,7 +262,6 @@ export default function SitesPage({ profile }) {
                     ...zone,
                     areas: zone.areas.map(area => {
                         if (area.id === updatedArea.id) {
-                            // Merge existing area data with updated data to preserve nested objects
                             return { ...area, ...updatedArea };
                         }
                         return area;
