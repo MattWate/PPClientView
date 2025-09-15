@@ -11,7 +11,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const AreaEditModal = ({ area, isOpen, onClose, onUpdate, profile }) => {
     const [name, setName] = useState('');
     const [areaTypeId, setAreaTypeId] = useState('');
-    const [dailyCleaningFrequency, setDailyCleaningFrequency] = useState(0); // <-- NEW: State for frequency
+    const [dailyCleaningFrequency, setDailyCleaningFrequency] = useState(0);
     const [areaTypes, setAreaTypes] = useState([]);
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -39,7 +39,7 @@ const AreaEditModal = ({ area, isOpen, onClose, onUpdate, profile }) => {
         if (area) {
             setName(area.name || '');
             setAreaTypeId(area.area_type_id || '');
-            setDailyCleaningFrequency(area.daily_cleaning_frequency || 0); // <-- NEW: Pre-fill frequency
+            setDailyCleaningFrequency(area.daily_cleaning_frequency || 0);
             setError(null);
         }
     }, [area]);
@@ -51,21 +51,25 @@ const AreaEditModal = ({ area, isOpen, onClose, onUpdate, profile }) => {
         setLoading(true);
         setError(null);
 
-        const { error: updateError } = await supabase
+        // --- FIX: Chain .select() to get the updated data back immediately ---
+        const { data: updatedArea, error: updateError } = await supabase
             .from('areas')
             .update({ 
                 name: name, 
                 area_type_id: areaTypeId || null,
-                daily_cleaning_frequency: dailyCleaningFrequency // <-- NEW: Save frequency to the database
+                daily_cleaning_frequency: dailyCleaningFrequency
             })
-            .eq('id', area.id);
+            .eq('id', area.id)
+            .select()
+            .single();
 
         setLoading(false);
         if (updateError) {
             setError(updateError.message);
         } else {
-            onUpdate(); // Refresh the hierarchy view
-            onClose(); // Close the modal
+            // --- FIX: Pass the updated area data directly back to the parent ---
+            onUpdate(updatedArea); 
+            onClose();
         }
     };
 
@@ -89,7 +93,6 @@ const AreaEditModal = ({ area, isOpen, onClose, onUpdate, profile }) => {
                                     ))}
                                 </select>
                             </div>
-                            {/* --- NEW: Field for setting cleaning frequency --- */}
                             <div>
                                 <label className="text-sm font-medium text-gray-700">Cleanings Per Day</label>
                                 <input
@@ -193,7 +196,6 @@ export default function SitesPage({ profile }) {
             setLoading(true);
             const { data, error } = await supabase
                 .from('sites')
-                // The '*' in areas(*) will automatically fetch the new 'daily_cleaning_frequency' column
                 .select('*, zones(*, areas(*, area_types(id, name)))')
                 .eq('company_id', profile.company_id);
 
@@ -242,10 +244,27 @@ export default function SitesPage({ profile }) {
             fetchFullHierarchy();
         }
     };
+
+    // --- NEW: Handler to update local state without a full re-fetch ---
+    const handleAreaUpdate = (updatedArea) => {
+        setSites(currentSites =>
+            currentSites.map(site => ({
+                ...site,
+                zones: site.zones.map(zone => ({
+                    ...zone,
+                    areas: zone.areas.map(area => {
+                        if (area.id === updatedArea.id) {
+                            // Merge existing area data with updated data to preserve nested objects
+                            return { ...area, ...updatedArea };
+                        }
+                        return area;
+                    })
+                }))
+            }))
+        );
+    };
     
     const handleDelete = async (type, id) => {
-        // A simple window.confirm is used here. For a better user experience,
-        // you might want to replace this with a custom confirmation modal.
         if (!window.confirm(`Are you sure you want to delete this ${type}? This action cannot be undone.`)) return;
         
         let result;
@@ -292,7 +311,6 @@ export default function SitesPage({ profile }) {
                                                             <li key={area.id} className="flex justify-between items-center text-sm p-1 hover:bg-gray-50 rounded-md">
                                                                 <div>
                                                                     <span>{area.name}</span>
-                                                                    {/* --- NEW: Display the cleaning frequency --- */}
                                                                     {area.daily_cleaning_frequency > 0 && 
                                                                         <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
                                                                             {area.daily_cleaning_frequency}x Daily
@@ -369,7 +387,7 @@ export default function SitesPage({ profile }) {
                 area={editingArea}
                 isOpen={!!editingArea}
                 onClose={() => setEditingArea(null)}
-                onUpdate={fetchFullHierarchy}
+                onUpdate={handleAreaUpdate}
                 profile={profile}
             />
 
