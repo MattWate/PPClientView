@@ -1,52 +1,63 @@
 import React, { useState, useEffect, useCallback } from 'react';
+// This component assumes it will be provided with a Supabase client via imports,
+// consistent with the rest of your project's structure.
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
-import { supabase } from '../services/supabaseClient';
+
+// --- Supabase Client Initialization ---
+// NOTE: You must replace these with your actual Supabase project URL and anon key
+const SUPABASE_URL = 'https://clsirugxuvdyxdnlwqqk.supabase.co'; // Replace with your Supabase URL
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNsc2lydWd4dXZkeXhkbmx3cXFrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUzNDQ2MzgsImV4cCI6MjA3MDkyMDYzOH0.gow7e2mHP_Qa0S0TsCriCfkKZ8jFTXO6ahp0mCstmoU'; // Replace with your Supabase anon key
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 
-// --- Task Assignment Modal ---
-// This modal allows a supervisor to assign unassigned tasks in an area to a cleaner.
-const TaskAssignmentModal = ({ area, isOpen, onClose, onUpdate, allCleaners, unassignedTasks }) => {
-    const [selectedCleanerId, setSelectedCleanerId] = useState('');
+// --- Task Management Modal ---
+// A unified modal for assigning pending tasks and creating new ad-hoc tasks.
+const TaskManagementModal = ({ area, isOpen, onClose, onUpdate, allCleaners, pendingTasks, profile }) => {
+    // State for assigning pending tasks
+    const [assigneeId, setAssigneeId] = useState('');
+    
+    // State for creating a new ad-hoc task
+    const [newAdHocTaskTitle, setNewAdHocTaskTitle] = useState('');
+    const [newAdHocTaskAssigneeId, setNewAdHocTaskAssigneeId] = useState('');
+    
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
 
     useEffect(() => {
-        // Reset state when modal opens
-        setSelectedCleanerId('');
+        // Reset form state when modal opens or area changes
+        setAssigneeId('');
+        setNewAdHocTaskTitle('');
+        setNewAdHocTaskAssigneeId('');
         setError('');
-    }, [isOpen]);
+    }, [isOpen, area]);
 
     if (!isOpen || !area) return null;
 
-    const handleAssignTasks = async () => {
-        if (!selectedCleanerId) {
-            setError('Please select a cleaner.');
+    // Handler for assigning all pending tasks
+    const handleAssignPendingTasks = async () => {
+        if (!assigneeId) {
+            setError('Please select a cleaner to assign the pending tasks.');
             return;
         }
-        if (unassignedTasks.length === 0) {
-            onClose();
-            return;
-        }
-
         setIsSubmitting(true);
         setError('');
 
         try {
-            const taskIdsToUpdate = unassignedTasks.map(t => t.id);
-
+            const taskIdsToUpdate = pendingTasks.map(t => t.id);
             const { error: updateError } = await supabase
                 .from('tasks')
-                .update({
-                    assigned_to: selectedCleanerId,
-                    status: 'assigned', // Update status to 'assigned'
-                    assigned_at: new Date().toISOString()
+                .update({ 
+                    assigned_to: assigneeId, 
+                    status: 'assigned', 
+                    assigned_at: new Date().toISOString() 
                 })
                 .in('id', taskIdsToUpdate);
 
             if (updateError) throw updateError;
-
-            onUpdate(); // Refresh the main dashboard data
+            
+            onUpdate(); // Refresh the main dashboard
             onClose();
+
         } catch (err) {
             setError('Failed to assign tasks. Please try again.');
             console.error(err);
@@ -55,49 +66,105 @@ const TaskAssignmentModal = ({ area, isOpen, onClose, onUpdate, allCleaners, una
         }
     };
 
+    // Handler for creating and assigning a new ad-hoc task
+    const handleCreateAdHocTask = async (e) => {
+        e.preventDefault();
+        if (!newAdHocTaskTitle || !newAdHocTaskAssigneeId) {
+            setError('Please provide a title and select a cleaner for the new task.');
+            return;
+        }
+        setIsSubmitting(true);
+        setError('');
+
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            const { error: insertError } = await supabase
+                .from('tasks')
+                .insert([{
+                    title: newAdHocTaskTitle,
+                    description: 'Ad-hoc task created by supervisor.',
+                    area_id: area.id,
+                    zone_id: area.zone_id,
+                    site_id: area.zones.site_id,
+                    company_id: area.company_id,
+                    assigned_to: newAdHocTaskAssigneeId,
+                    created_by: user?.id, 
+                    status: 'assigned',
+                    task_type: 'ad_hoc', // Make sure 'ad_hoc' is in your user-defined task_type enum
+                    assigned_at: new Date().toISOString()
+                }]);
+
+            if (insertError) throw insertError;
+
+            onUpdate();
+            onClose();
+
+        } catch (err) {
+            setError('Failed to create ad-hoc task. Please try again.');
+            console.error(err);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 z-40 flex justify-center items-center" onClick={onClose}>
-            <div className="bg-white rounded-lg shadow-xl max-w-lg w-full m-4 z-50" onClick={e => e.stopPropagation()}>
+            <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full m-4 z-50" onClick={e => e.stopPropagation()}>
                 <div className="p-6 border-b">
-                    <h3 className="text-xl font-bold">Assign Tasks in: {area.name}</h3>
-                     <p className="text-sm text-gray-500">{area.zones.sites.name} &gt; {area.zones.name}</p>
+                    <h3 className="text-xl font-bold">Manage Tasks for: {area.name}</h3>
+                    <p className="text-sm text-gray-500">{area.zones.sites.name} &gt; {area.zones.name}</p>
                 </div>
-                <div className="p-6 space-y-4">
-                    {unassignedTasks.length > 0 ? (
-                        <>
-                            <p>Select a cleaner to assign the following <span className="font-bold">{unassignedTasks.length}</span> unassigned task(s) to:</p>
-                            <ul className="list-disc pl-5 text-sm text-gray-700 max-h-40 overflow-y-auto">
-                               {unassignedTasks.map(task => <li key={task.id}>{task.title}</li>)}
-                            </ul>
-                            <select
-                                value={selectedCleanerId}
-                                onChange={(e) => setSelectedCleanerId(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
-                            >
-                                <option value="">Select a Cleaner...</option>
-                                {allCleaners.map(cleaner => (
-                                    <option key={cleaner.id} value={cleaner.id}>{cleaner.full_name}</option>
-                                ))}
-                            </select>
-                        </>
-                    ) : (
-                        <p className="text-gray-600 text-center">There are no pending tasks to assign in this area.</p>
-                    )}
+
+                <div className="p-6 max-h-[70vh] overflow-y-auto">
+                    {/* Section for assigning auto-generated tasks */}
+                    <div className="mb-8">
+                        <h4 className="font-semibold text-lg border-b pb-2 mb-4">Assign Pending Scheduled Tasks</h4>
+                        {pendingTasks.length > 0 ? (
+                            <div className="space-y-4">
+                                <p>Assign all <span className="font-bold">{pendingTasks.length}</span> pending task(s) to a cleaner:</p>
+                                <ul className="list-disc pl-5 text-sm text-gray-600 bg-gray-50 p-3 rounded-md">
+                                    {pendingTasks.map(task => <li key={task.id}>{task.title}</li>)}
+                                </ul>
+                                <select value={assigneeId} onChange={e => setAssigneeId(e.target.value)} className="w-full p-2 border rounded-md">
+                                    <option value="">Select Cleaner...</option>
+                                    {allCleaners.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
+                                </select>
+                                <button onClick={handleAssignPendingTasks} disabled={isSubmitting || !assigneeId} className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 disabled:opacity-50">
+                                    {isSubmitting ? 'Assigning...' : 'Assign Pending Tasks'}
+                                </button>
+                            </div>
+                        ) : (
+                            <p className="text-gray-500">No scheduled tasks are pending for this area.</p>
+                        )}
+                    </div>
+
+                    {/* Section for creating ad-hoc tasks */}
+                    <div>
+                        <h4 className="font-semibold text-lg border-b pb-2 mb-4">Create Ad-Hoc Task</h4>
+                        <form onSubmit={handleCreateAdHocTask} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium">Task Title</label>
+                                <input type="text" value={newAdHocTaskTitle} onChange={e => setNewAdHocTaskTitle(e.target.value)} placeholder="e.g., Urgent Spill Cleanup" className="w-full p-2 border rounded-md mt-1"/>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium">Assign To</label>
+                                <select value={newAdHocTaskAssigneeId} onChange={e => setNewAdHocTaskAssigneeId(e.target.value)} className="w-full p-2 border rounded-md mt-1">
+                                    <option value="">Select Cleaner...</option>
+                                    {allCleaners.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
+                                </select>
+                            </div>
+                            <button type="submit" disabled={isSubmitting || !newAdHocTaskTitle || !newAdHocTaskAssigneeId} className="w-full bg-green-600 text-white py-2 rounded-md hover:bg-green-700 disabled:opacity-50">
+                                {isSubmitting ? 'Creating...' : 'Create & Assign Task'}
+                            </button>
+                        </form>
+                    </div>
                 </div>
+                
                 <div className="flex justify-between items-center p-4 bg-gray-50 rounded-b-lg">
-                     {error && <p className="text-red-600 text-sm">{error}</p>}
-                    <button onClick={onClose} className="bg-gray-200 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-300">
-                        Cancel
+                     {error && <p className="text-red-600 text-sm max-w-md">{error}</p>}
+                    <button onClick={onClose} className="bg-gray-200 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-300 ml-auto">
+                        Close
                     </button>
-                   {unassignedTasks.length > 0 && (
-                     <button
-                        onClick={handleAssignTasks}
-                        disabled={isSubmitting || !selectedCleanerId}
-                        className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50"
-                    >
-                        {isSubmitting ? 'Assigning...' : 'Assign Tasks'}
-                    </button>
-                   )}
                 </div>
             </div>
         </div>
@@ -115,15 +182,15 @@ export default function SupervisorDashboard({ profile }) {
     const [selectedArea, setSelectedArea] = useState(null);
 
     const fetchData = useCallback(async () => {
-        if (!profile) return;
+        if (!profile?.id || !profile?.company_id) return;
         try {
             setLoading(true);
             setError(null);
 
-            // 1. Get zones assigned to the supervisor from 'zone_assignments'
+            // 1. Get zones assigned to the supervisor
             const { data: assignedZones, error: zonesError } = await supabase
                 .from('zone_assignments')
-                .select('zones(*, sites(*))')
+                .select('zones!inner(*, sites(*))') // Use !inner to only get zones if they exist
                 .eq('user_id', profile.id);
             if (zonesError) throw zonesError;
 
@@ -143,7 +210,6 @@ export default function SupervisorDashboard({ profile }) {
                 .in('zone_id', zoneIds);
             if (areasError) throw areasError;
             
-             // Group areas by zone_id for easier lookup
             const areasByZone = areasData.reduce((acc, area) => {
                 if (!acc[area.zone_id]) acc[area.zone_id] = [];
                 acc[area.zone_id].push(area);
@@ -156,7 +222,7 @@ export default function SupervisorDashboard({ profile }) {
             }));
             setZones(zonesWithAreas);
 
-            // 3. Get all tasks within those zones (pending or assigned)
+            // 3. Get all relevant tasks (pending or assigned)
             const { data: tasksData, error: tasksError } = await supabase
                 .from('tasks')
                 .select('id, title, status, area_id, assigned_to')
@@ -191,8 +257,7 @@ export default function SupervisorDashboard({ profile }) {
     if (loading) return <div className="p-6">Loading dashboard...</div>;
     if (error) return <div className="p-6 text-red-600">Error: {error}</div>;
     
-    // Find unassigned tasks for the selected area
-    const unassignedTasksForModal = selectedArea ? tasks.filter(t => t.area_id === selectedArea.id && t.status === 'pending') : [];
+    const pendingTasksForModal = selectedArea ? tasks.filter(t => t.area_id === selectedArea.id && t.status === 'pending') : [];
 
     return (
         <>
@@ -204,10 +269,9 @@ export default function SupervisorDashboard({ profile }) {
                             <h3 className="text-xl font-semibold mb-1">{zone.name}</h3>
                             <p className="text-sm text-gray-500 mb-4">Site: {zone.sites.name}</p>
                             <div className="space-y-4">
-                                {zone.areas.length > 0 ? zone.areas.map(area => {
-                                    const areaTasks = tasks.filter(t => t.area_id === area.id);
-                                    const assignedTasks = areaTasks.filter(t => t.status === 'assigned');
-                                    const pendingTasks = areaTasks.filter(t => t.status === 'pending');
+                                {zone.areas?.length > 0 ? zone.areas.map(area => {
+                                    const assignedTasks = tasks.filter(t => t.area_id === area.id && t.status === 'assigned');
+                                    const pendingTaskCount = tasks.filter(t => t.area_id === area.id && t.status === 'pending').length;
 
                                     return (
                                         <div key={area.id} className="border rounded-md p-4 bg-gray-50">
@@ -215,10 +279,9 @@ export default function SupervisorDashboard({ profile }) {
                                                 <p className="font-semibold text-gray-800">{area.name}</p>
                                                 <button
                                                     onClick={() => setSelectedArea(area)}
-                                                    className="bg-blue-500 text-white py-1 px-3 text-sm rounded-md hover:bg-blue-600 disabled:opacity-50"
-                                                    disabled={pendingTasks.length === 0}
+                                                    className="bg-blue-500 text-white py-1 px-3 text-sm rounded-md hover:bg-blue-600"
                                                 >
-                                                    Assign Tasks ({pendingTasks.length})
+                                                    Manage ({pendingTaskCount} Pending)
                                                 </button>
                                             </div>
                                             <div className="mt-2 pl-4 border-l-2">
@@ -244,19 +307,20 @@ export default function SupervisorDashboard({ profile }) {
                         </div>
                     )) : (
                         <div className="bg-white p-6 rounded-lg shadow-md text-center">
-                            <p className="text-gray-600">You are not assigned to any zones.</p>
+                            <p className="text-gray-600">You are not assigned to any zones, or there are no areas in your assigned zones.</p>
                         </div>
                     )}
                 </div>
             </div>
             
-            <TaskAssignmentModal
+            <TaskManagementModal
+                profile={profile}
                 area={selectedArea ? { ...selectedArea, zones: zones.find(z => z.id === selectedArea.zone_id) } : null}
                 isOpen={!!selectedArea}
                 onClose={() => setSelectedArea(null)}
                 onUpdate={fetchData}
                 allCleaners={cleaners}
-                unassignedTasks={unassignedTasksForModal}
+                pendingTasks={pendingTasksForModal}
             />
         </>
     );
