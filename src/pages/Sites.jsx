@@ -51,25 +51,28 @@ const AreaEditModal = ({ area, isOpen, onClose, onUpdate, profile }) => {
         setLoading(true);
         setError(null);
 
-        // --- FIX: Chain .select() to get the updated data back immediately ---
-        const { data: updatedArea, error: updateError } = await supabase
+        // --- FIX: Remove .single() and handle the array response ---
+        const { data: updatedAreas, error: updateError } = await supabase
             .from('areas')
-            .update({ 
-                name: name, 
+            .update({
+                name: name,
                 area_type_id: areaTypeId || null,
                 daily_cleaning_frequency: dailyCleaningFrequency
             })
             .eq('id', area.id)
-            .select()
-            .single();
+            .select();
 
         setLoading(false);
         if (updateError) {
             setError(updateError.message);
         } else {
-            // --- FIX: Pass the updated area data directly back to the parent ---
-            onUpdate(updatedArea); 
-            onClose();
+            // --- FIX: Take the first item from the returned array ---
+            if (updatedAreas && updatedAreas.length > 0) {
+                onUpdate(updatedAreas[0]);
+                onClose();
+            } else {
+                setError("Could not verify the update. Please refresh the page.");
+            }
         }
     };
 
