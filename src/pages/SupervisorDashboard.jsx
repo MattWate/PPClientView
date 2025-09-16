@@ -28,7 +28,9 @@ const TaskManagementModal = ({ area, isOpen, onClose, onUpdate, allCleaners, tod
 
     if (!isOpen || !area) return null;
     
-    const tasksToGenerateCount = Math.max(0, area.daily_cleaning_frequency - todaysScheduledTaskCount);
+    // Ensure daily_cleaning_frequency is treated as a number, defaulting to 0
+    const requiredTasks = Number(area.daily_cleaning_frequency) || 0;
+    const tasksToGenerateCount = Math.max(0, requiredTasks - todaysScheduledTaskCount);
     const pendingTasks = area.tasks.filter(t => t.status === 'pending');
 
     const handleGenerateTasks = async () => {
@@ -139,7 +141,7 @@ const TaskManagementModal = ({ area, isOpen, onClose, onUpdate, allCleaners, tod
                                 </button>
                             </div>
                         ) : (
-                             <p className="text-gray-600">All scheduled tasks for today have been generated.</p>
+                             <p className="text-gray-600">All required ({requiredTasks}) scheduled tasks for today have been generated.</p>
                         )}
                     </div>
                     
@@ -290,7 +292,7 @@ export default function SupervisorDashboard({ profile }) {
                                                 <div>
                                                     <p className="font-semibold text-gray-800">{area.name}</p>
                                                     <p className="text-xs text-gray-600">
-                                                        Daily Tasks Generated: {todaysScheduledTaskCount} / {area.daily_cleaning_frequency}
+                                                        Daily Tasks Generated: {todaysScheduledTaskCount} / {Number(area.daily_cleaning_frequency) || 0}
                                                     </p>
                                                 </div>
                                                 <button onClick={() => setSelectedArea(area)} className="bg-blue-500 text-white py-1 px-3 text-sm rounded-md hover:bg-blue-600">
