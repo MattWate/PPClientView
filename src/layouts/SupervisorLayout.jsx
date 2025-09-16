@@ -1,14 +1,18 @@
+// src/layouts/SupervisorLayout.jsx
 import React, { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../services/supabaseClient';
+import { useAuth } from '../contexts/AuthContext';
 import SupervisorDashboard from '../pages/SupervisorDashboard.jsx';
 
-// --- Sidebar ---
-const Sidebar = ({ navLinks, profile, setCurrentPage }) => (
+/* ---------- Sidebar (with Logout) ---------- */
+const Sidebar = ({ navLinks, profile, setCurrentPage, onLogout }) => (
   <div className="w-64 bg-gray-800 text-white flex-shrink-0 hidden md:flex md:flex-col">
     <div className="p-4">
       <h2 className="text-xl font-bold">PristinePoint</h2>
       <p className="text-sm text-gray-400">{profile?.full_name}</p>
     </div>
+
     <nav className="flex-1">
       <ul>
         {navLinks.map(link => (
@@ -23,10 +27,20 @@ const Sidebar = ({ navLinks, profile, setCurrentPage }) => (
         ))}
       </ul>
     </nav>
+
+    {/* Logout action */}
+    <div className="p-4 border-t border-gray-700">
+      <button
+        onClick={onLogout}
+        className="w-full bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-md"
+      >
+        Log out
+      </button>
+    </div>
   </div>
 );
 
-// --- Simple header (optional, if you need it)
+/* ---------- Optional header (kept simple) ---------- */
 const Header = ({ title, profile }) => (
   <header className="bg-white shadow-md p-4 flex justify-between items-center">
     <h1 className="text-2xl font-semibold text-gray-800 capitalize">{title.replace('-', ' ')}</h1>
@@ -36,7 +50,7 @@ const Header = ({ title, profile }) => (
   </header>
 );
 
-// --- Error boundary
+/* ---------- Error boundary ---------- */
 class LocalErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { error: null }; }
   static getDerivedStateFromError(error) { return { error }; }
@@ -54,8 +68,27 @@ class LocalErrorBoundary extends React.Component {
   }
 }
 
+/* ---------- Main Layout ---------- */
 export default function SupervisorLayout({ session, profile }) {
   if (!session?.user) return null;
+
+  const navigate = useNavigate();
+  const authCtx = (() => { try { return useAuth(); } catch { return {}; } })() || {};
+  const { signOut } = authCtx;
+
+  const handleLogout = async () => {
+    try {
+      if (typeof signOut === 'function') {
+        await signOut();
+      } else {
+        await supabase.auth.signOut();
+      }
+    } finally {
+      navigate('/'); // send back to home/login
+    }
+  };
+
+  const [currentPage, setCurrentPage] = useState('dashboard');
 
   const safeProfile = useMemo(() => {
     const fallbackEmail = session?.user?.email ?? 'user@example.com';
@@ -68,8 +101,6 @@ export default function SupervisorLayout({ session, profile }) {
       company_id: baseProfile.company_id ?? null,
     };
   }, [profile, session]);
-
-  const [currentPage, setCurrentPage] = useState('dashboard');
 
   const supervisorNavLinks = [
     { name: 'Dashboard',   current: currentPage === 'dashboard' },
@@ -99,6 +130,7 @@ export default function SupervisorLayout({ session, profile }) {
         navLinks={supervisorNavLinks}
         profile={safeProfile}
         setCurrentPage={setCurrentPage}
+        onLogout={handleLogout}
       />
       <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-200">
         <div className="container mx-auto px-6 py-8">
