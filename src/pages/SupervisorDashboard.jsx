@@ -8,21 +8,21 @@ const startOfTomorrow = () => { const d = startOfToday(); d.setDate(d.getDate()+
 
 /** -------- modal: generate/assign/create tasks for one area -------- */
 const TaskManagementModal = ({
-  area,         // { id, name, zone_id, company_id, required, scheduledTodayCount, tasks, zones: { id, name, sites? } }
+  area,
   isOpen,
   onClose,
   onUpdate,
-  allCleaners,  // <- now already filtered to this area's zone_id
+  allCleaners,
   profile
 }) => {
-  const [assigneeId, setAssigneeId] = useState('');
+  const [assignments, setAssignments] = useState({}); // Stores { [taskId]: cleanerId }
   const [newAdHocTaskTitle, setNewAdHocTaskTitle] = useState('');
   const [newAdHocTaskAssigneeId, setNewAdHocTaskAssigneeId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    setAssigneeId('');
+    setAssignments({});
     setNewAdHocTaskTitle('');
     setNewAdHocTaskAssigneeId('');
     setError('');
@@ -36,13 +36,15 @@ const TaskManagementModal = ({
   const tasksToGenerateCount = Math.max(0, requiredTasks - generatedToday);
   const pendingTasks = (area.tasks || []).filter(t => t.status === 'pending');
 
+  const handleAssignmentChange = (taskId, cleanerId) => {
+    setAssignments(prev => ({ ...prev, [taskId]: cleanerId }));
+  };
+
   const handleGenerateTasks = async () => {
     if (tasksToGenerateCount <= 0) return;
     setIsSubmitting(true); setError('');
     try {
       const batch = Array.from({ length: tasksToGenerateCount }).map(() => ({
-        // --- THIS IS THE FIX ---
-        // The 'title' column is NOT NULL in the database, so we must provide a value.
         title: `Standard Clean - ${area.name}`,
         description: `Scheduled daily cleaning for ${area.name}.`,
         company_id: area.company_id,
@@ -55,7 +57,7 @@ const TaskManagementModal = ({
       }));
       const { error: insertError } = await supabase.from('tasks').insert(batch);
       if (insertError) throw insertError;
-      onUpdate(); // Refresh the main dashboard data
+      onUpdate();
     } catch (e) {
       console.error(e);
       setError('Failed to generate daily tasks. Please try again.');
@@ -64,24 +66,27 @@ const TaskManagementModal = ({
     }
   };
 
-  const handleAssignPendingTasks = async () => {
-    if (!assigneeId) {
-      setError('Please select a cleaner to assign the pending tasks.');
+  const handleSaveAssignments = async () => {
+    const assignmentsToSave = Object.entries(assignments).filter(([, cleanerId]) => cleanerId);
+    if (assignmentsToSave.length === 0) {
+      setError('No assignments have been made.');
       return;
     }
     setIsSubmitting(true); setError('');
     try {
-      const ids = pendingTasks.map(t => t.id);
-      if (ids.length === 0) return;
-      const { error: updateError } = await supabase
-        .from('tasks')
-        .update({ assigned_to: assigneeId, status: 'assigned', assigned_at: new Date().toISOString() })
-        .in('id', ids);
-      if (updateError) throw updateError;
+      const updatePromises = assignmentsToSave.map(([taskId, cleanerId]) =>
+        supabase
+          .from('tasks')
+          .update({ assigned_to: cleanerId, status: 'assigned', assigned_at: new Date().toISOString() })
+          .eq('id', taskId)
+      );
+      const results = await Promise.all(updatePromises);
+      const firstError = results.find(res => res.error);
+      if (firstError) throw firstError.error;
       onUpdate(); onClose();
     } catch (e) {
       console.error(e);
-      setError('Failed to assign tasks.');
+      setError('Failed to save assignments.');
     } finally {
       setIsSubmitting(false);
     }
@@ -146,20 +151,23 @@ const TaskManagementModal = ({
           {/* Assign pending */}
           <div className="mb-8">
             <h4 className="font-semibold text-lg border-b pb-2 mb-4">Assign Pending Tasks</h4>
-            {(allCleaners?.length ?? 0) === 0 && (
-              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mb-3">
-                No cleaners are assigned to this zone.
-              </p>
-            )}
             {pendingTasks.length > 0 ? (
               <div className="space-y-4">
-                <p>Assign all <b>{pendingTasks.length}</b> pending task(s) to a cleaner:</p>
-                <select value={assigneeId} onChange={e => setAssigneeId(e.target.value)} className="w-full p-2 border rounded-md">
-                  <option value="">Select Cleaner…</option>
-                  {allCleaners.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
-                </select>
-                <button onClick={handleAssignPendingTasks} disabled={isSubmitting || !assigneeId} className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 disabled:opacity-50">
-                  {isSubmitting ? 'Assigning…' : 'Assign Pending Tasks'}
+                {pendingTasks.map(task => (
+                  <div key={task.id} className="flex items-center justify-between p-2 bg-gray-100 rounded">
+                    <span className="text-sm font-medium">{task.title}</span>
+                    <select
+                      value={assignments[task.id] || ''}
+                      onChange={e => handleAssignmentChange(task.id, e.target.value)}
+                      className="p-2 border rounded-md text-sm"
+                    >
+                      <option value="">Assign to…</option>
+                      {allCleaners.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
+                    </select>
+                  </div>
+                ))}
+                <button onClick={handleSaveAssignments} disabled={isSubmitting} className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 disabled:opacity-50">
+                  {isSubmitting ? 'Saving…' : 'Save Assignments'}
                 </button>
               </div>
             ) : (
@@ -206,37 +214,21 @@ export default function SupervisorDashboard() {
     try {
       setLoading(true); setError(null);
 
-      // 1) Zones assigned to this supervisor
-      const { data: assignedZones, error: zonesError } = await supabase
-        .from('zone_assignments')
-        .select('zones!inner(*, sites(*))')
-        .eq('user_id', profile.id);
+      const { data: assignedZones, error: zonesError } = await supabase.from('zone_assignments').select('zones!inner(*, sites(*))').eq('user_id', profile.id);
       if (zonesError) throw zonesError;
 
       const supervisorZones = (assignedZones || []).map(z => z.zones).filter(Boolean);
       const zoneIds = supervisorZones.map(z => z.id);
       if (zoneIds.length === 0) { setZones([]); setZoneCleanersMap({}); setLoading(false); return; }
 
-      // 2) Areas (include daily_cleaning_frequency)
-      const { data: areasData, error: areasError } = await supabase
-        .from('areas')
-        .select('id, name, zone_id, company_id, daily_cleaning_frequency')
-        .in('zone_id', zoneIds);
+      const { data: areasData, error: areasError } = await supabase.from('areas').select('id, name, zone_id, company_id, daily_cleaning_frequency').in('zone_id', zoneIds);
       if (areasError) throw areasError;
 
-      // 3) Today's tasks
       const start = startOfToday().toISOString();
       const end = startOfTomorrow().toISOString();
-
-      const { data: tasksData, error: tasksError } = await supabase
-        .from('tasks')
-        .select('id, title, status, area_id, assigned_to, task_type, created_at, zone_id, profiles:assigned_to(full_name)')
-        .in('zone_id', zoneIds)
-        .gte('created_at', start)
-        .lt('created_at', end);
+      const { data: tasksData, error: tasksError } = await supabase.from('tasks').select('id, title, status, area_id, assigned_to, task_type, created_at, zone_id, profiles:assigned_to(full_name)').in('zone_id', zoneIds).gte('created_at', start).lt('created_at', end);
       if (tasksError) throw tasksError;
 
-      // 4) Attach tasks + computed counts to areas
       const areasWithMeta = (areasData || []).map(area => {
         const tasks = (tasksData || []).filter(t => t.area_id === area.id);
         const scheduledTodayCount = tasks.filter(t => t.task_type === 'scheduled').length;
@@ -245,27 +237,17 @@ export default function SupervisorDashboard() {
         return { ...area, tasks, scheduledTodayCount, required, remaining };
       });
 
-      // 5) Group by zone and hydrate zones list
       const areasByZone = areasWithMeta.reduce((acc, a) => { (acc[a.zone_id] ||= []).push(a); return acc; }, {});
       const zonesWithAreas = supervisorZones.map(zone => ({ ...zone, areas: areasByZone[zone.id] || [] }));
       setZones(zonesWithAreas);
 
-      // 6) Build zone → cleaners map from zone_assignments + profiles
-      const { data: za, error: zaErr } = await supabase
-        .from('zone_assignments')
-        .select('zone_id, user_id')
-        .in('zone_id', zoneIds);
+      const { data: za, error: zaErr } = await supabase.from('zone_assignments').select('zone_id, user_id').in('zone_id', zoneIds);
       if (zaErr) throw zaErr;
 
       const cleanerIds = Array.from(new Set((za || []).map(r => r.user_id)));
       let cleanersById = {};
       if (cleanerIds.length > 0) {
-        const { data: cleaners, error: cleanersErr } = await supabase
-          .from('profiles')
-          .select('id, full_name, role, company_id')
-          .in('id', cleanerIds)
-          .eq('role', 'cleaner')
-          .eq('company_id', profile.company_id);
+        const { data: cleaners, error: cleanersErr } = await supabase.from('profiles').select('id, full_name, role, company_id').in('id', cleanerIds).eq('role', 'cleaner').eq('company_id', profile.company_id);
         if (cleanersErr) throw cleanersErr;
         cleanersById = (cleaners || []).reduce((acc, c) => { acc[c.id] = { id: c.id, full_name: c.full_name || 'Unnamed' }; return acc; }, {});
       }
@@ -295,39 +277,37 @@ export default function SupervisorDashboard() {
     <>
       <div className="p-6 bg-gray-50 min-h-screen">
         <h2 className="text-2xl font-bold text-gray-800 mb-6">Task Assignment Dashboard</h2>
-
         <div className="space-y-8">
-          {zones.length > 0 ? zones.map(zone => (
+          {zones.map(zone => (
             <div key={zone.id} className="bg-white p-4 rounded-lg shadow-md border">
               <h3 className="text-xl font-semibold mb-1">{zone.name}</h3>
               <p className="text-sm text-gray-500 mb-4">Site: {zone?.sites?.name || '—'}</p>
-
               <div className="space-y-4">
-                {zone.areas?.length > 0 ? zone.areas.map(area => {
+                {(zone.areas || []).map(area => {
                   const assignedTasks = area.tasks.filter(t => t.status === 'assigned');
                   return (
                     <div key={area.id} className="border rounded-md p-4 bg-gray-50">
-                      <div className="flex justify-between items-center">
+                      {/* --- FIX: Responsive Layout --- */}
+                      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                         <div>
                           <p className="font-semibold text-gray-800">{area.name}</p>
                           <p className="text-xs text-gray-600">
-                            Required today: <b>{area.required}</b> ·
+                            Required: <b>{area.required}</b> ·
                             Generated: <b>{area.scheduledTodayCount}</b> ·
                             Remaining: <b>{area.remaining}</b>
                           </p>
                         </div>
                         <button
                           onClick={() => setSelectedArea({ ...area })}
-                          className="bg-blue-500 text-white py-1 px-3 text-sm rounded-md hover:bg-blue-600"
+                          className="bg-blue-500 text-white py-2 px-4 text-sm rounded-md hover:bg-blue-600 w-full sm:w-auto"
                         >
                           Manage ({area.remaining} Remaining)
                         </button>
                       </div>
-
-                      <div className="mt-2 pl-4 border-l-2">
-                        <h5 className="text-xs font-bold text-gray-500 uppercase mb-1">Assigned Tasks</h5>
+                      <div className="mt-3 pt-3 pl-4 border-l-2 sm:border-l-0 sm:border-t-2 sm:mt-4 sm:pt-4 sm:pl-0">
+                        <h5 className="text-xs font-bold text-gray-500 uppercase mb-2">Assigned Tasks</h5>
                         {assignedTasks.length > 0 ? (
-                          <ul className="list-disc pl-5 space-y-1">
+                          <ul className="space-y-1">
                             {assignedTasks.map(task => (
                               <li key={task.id} className="text-sm text-gray-700">
                                 {task.title} — <span className="font-semibold">{task.profiles?.full_name || 'Unknown'}</span>
@@ -340,30 +320,19 @@ export default function SupervisorDashboard() {
                       </div>
                     </div>
                   );
-                }) : (
-                  <p className="text-sm text-gray-500">No areas found in this zone.</p>
-                )}
+                })}
               </div>
             </div>
-          )) : (
-            <div className="bg-white p-6 rounded-lg shadow-md text-center">
-              <p className="text-gray-600">You are not assigned to any zones, or there are no areas in your assigned zones.</p>
-            </div>
-          )}
+          ))}
         </div>
       </div>
-
       <TaskManagementModal
         profile={profile}
         area={selectedArea ? { ...selectedArea, zones: zones.find(z => z.id === selectedArea.zone_id) } : null}
         isOpen={!!selectedArea}
         onClose={() => setSelectedArea(null)}
         onUpdate={fetchData}
-        allCleaners={
-          selectedArea
-            ? (zoneCleanersMap[selectedArea.zone_id] || [])
-            : []
-        }
+        allCleaners={selectedArea ? (zoneCleanersMap[selectedArea.zone_id] || []) : []}
       />
     </>
   );
