@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../services/supabaseClient.js';
+import { supabase } from '../services/supabaseClient';
 
 export default function DashboardPage({ profile }) {
   const [stats, setStats] = useState({ completed: 0, issues: 0, active: 0, compliance: 0, sites: 0 });
@@ -14,13 +14,11 @@ export default function DashboardPage({ profile }) {
       try {
         setLoading(true);
         
-        // --- NEW: Fetch site count along with other stats ---
         const [completed, issues, activity, compliance, sitesCount] = await Promise.all([
           supabase.rpc('count_tasks_today', { p_company_id: profile.company_id, p_statuses: ['completed', 'verified'] }),
           supabase.rpc('count_tasks_today', { p_company_id: profile.company_id, p_task_type: 'issue' }),
           supabase.rpc('count_active_staff_today', { p_company_id: profile.company_id }),
           supabase.rpc('calculate_compliance_rate', { p_company_id: profile.company_id }),
-          // Efficiently count sites without fetching all the data
           supabase.from('sites').select('*', { count: 'exact', head: true }).eq('company_id', profile.company_id),
         ]);
 
@@ -29,42 +27,23 @@ export default function DashboardPage({ profile }) {
           issues: issues.data || 0,
           active: activity.data || 0,
           compliance: compliance.data ? (compliance.data * 100).toFixed(1) : 0,
-          sites: sitesCount.count || 0, // Add site count to state
+          sites: sitesCount.count || 0,
         });
 
-        // Fetch recent activity tasks
+        // --- FIX: Fetch recently COMPLETED tasks, not recently created ones ---
         const { data: tasksData, error: tasksError } = await supabase
             .from('tasks')
-            .select('*, areas(name, zones(name, sites(name)))')
+            .select('*, areas(name, zones(name, sites(name))), profiles:completed_by(full_name)')
             .eq('company_id', profile.company_id)
-            .order('created_at', { ascending: false })
+            .in('status', ['completed', 'verified']) // Only show completed/verified tasks
+            .not('completed_at', 'is', null) // Ensure they have a completion date
+            .order('completed_at', { ascending: false }) // Order by completion time
             .limit(5);
         if (tasksError) throw tasksError;
+        setRecentActivity(tasksData || []);
 
-        // Fetch profiles for the recent activity
-        const userIds = tasksData.map(task => task.completed_by).filter(Boolean);
-        if (userIds.length > 0) {
-            const { data: profilesData, error: profilesError } = await supabase
-                .from('profiles')
-                .select('id, full_name')
-                .in('id', userIds);
-            if (profilesError) throw profilesError;
 
-            const profileMap = profilesData.reduce((acc, profile) => {
-                acc[profile.id] = profile;
-                return acc;
-            }, {});
-
-            const combinedActivity = tasksData.map(task => ({
-                ...task,
-                profiles: profileMap[task.completed_by]
-            }));
-            setRecentActivity(combinedActivity);
-        } else {
-            setRecentActivity(tasksData);
-        }
-
-        // Fetch open issues
+        // Fetch open issues (no change needed here)
         const { data: issuesData, error: issuesError } = await supabase
             .from('tasks')
             .select('*, areas(name, zones(name, sites(name)))')
@@ -73,7 +52,7 @@ export default function DashboardPage({ profile }) {
             .neq('status', 'verified')
             .order('created_at', { ascending: true });
         if(issuesError) throw issuesError;
-        setOpenIssues(issuesData);
+        setOpenIssues(issuesData || []);
 
       } catch (error) {
         setError(error.message);
@@ -92,7 +71,6 @@ export default function DashboardPage({ profile }) {
     <div className="space-y-6">
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
-        {/* --- NEW: Added Site Count KPI Card --- */}
         <KpiCard title="Total Sites" value={stats.sites} icon="fa-sitemap" color="purple" />
         <KpiCard title="Tasks Completed Today" value={stats.completed} icon="fa-check-circle" color="green" />
         <KpiCard title="Issues Reported Today" value={stats.issues} icon="fa-exclamation-triangle" color="red" />
@@ -105,32 +83,39 @@ export default function DashboardPage({ profile }) {
         <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-md">
           <h3 className="text-xl font-semibold text-gray-800 mb-4">Recent Activity</h3>
           <ul className="space-y-4">
-            {recentActivity.map(task => (
+            {recentActivity.length > 0 ? recentActivity.map(task => (
               <li key={task.id} className="flex items-center space-x-4">
                 <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-full bg-gray-100 text-gray-500">
                   <i className="fas fa-tasks"></i>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-800">
-                    {task.profiles?.full_name || 'System'} completed "{task.title}"
+                    {/* --- FIX: Display name and dynamic status --- */}
+                    {task.profiles?.full_name || 'System'}{' '}
+                    <span className="font-normal text-gray-600">{task.status === 'verified' ? 'verified' : 'completed'}</span>{' '}
+                    "{task.title}"
                   </p>
                   <p className="text-xs text-gray-500">
                     {task.areas?.sites?.name} &gt; {task.areas?.zones?.name} &gt; {task.areas?.name}
                   </p>
                 </div>
               </li>
-            ))}
+            )) : (
+              <p className="text-sm text-gray-500">No recent activity to display.</p>
+            )}
           </ul>
         </div>
         <div className="bg-white p-6 rounded-lg shadow-md">
           <h3 className="text-xl font-semibold text-gray-800 mb-4">Open Issues</h3>
           <ul className="space-y-3">
-            {openIssues.map(issue => (
+            {openIssues.length > 0 ? openIssues.map(issue => (
               <li key={issue.id} className="p-3 bg-red-50 rounded-md">
                 <p className="font-semibold text-red-800">{issue.title}</p>
                 <p className="text-xs text-red-600">{issue.areas?.sites?.name} &gt; {issue.areas?.zones?.name} &gt; {issue.areas?.name}</p>
               </li>
-            ))}
+            )) : (
+                <p className="text-sm text-gray-500">No open issues.</p>
+            )}
           </ul>
         </div>
       </div>
@@ -144,7 +129,7 @@ const KpiCard = ({ title, value, icon, color }) => {
     red: 'bg-red-100 text-red-600',
     blue: 'bg-blue-100 text-blue-600',
     yellow: 'bg-yellow-100 text-yellow-600',
-    purple: 'bg-purple-100 text-purple-600', // Added purple for the new card
+    purple: 'bg-purple-100 text-purple-600',
   };
   return (
     <div className="bg-white p-6 rounded-lg shadow-md flex items-center justify-between">
