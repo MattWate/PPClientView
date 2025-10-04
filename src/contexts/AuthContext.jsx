@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import { supabase } from '../services/supabaseClient';
+import { supabase } from '../services/supabaseClient.js';
 
 const AuthContext = createContext();
 
@@ -9,33 +9,47 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // onAuthStateChange is the single source of truth for the user's session.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setSession(session);
+    // --- NEW: More robust effect logic ---
+    const setupAuth = async () => {
+      try {
+        // 1. Get the initial session. This is a one-time check.
+        const { data: { session: initialSession }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
 
-        // --- NEW: Fetch profile whenever the session changes ---
-        if (session?.user) {
-          try {
-            const { data, error } = await supabase
-              .from('profiles')
-              .select('id, full_name, role, company_id')
-              .eq('id', session.user.id)
-              .single();
-            
-            if (error) throw error;
-            setProfile(data || null);
-
-          } catch (error) {
-            console.error('Error fetching profile in AuthContext:', error);
-            setProfile(null);
-          }
+        // 2. If a session exists, fetch the user's profile.
+        if (initialSession?.user) {
+          const { data: userProfile, error: profileError } = await supabase
+            .from('profiles')
+            .select('id, full_name, role, company_id')
+            .eq('id', initialSession.user.id)
+            .single();
+          
+          if (profileError) throw profileError;
+          setProfile(userProfile || null);
         } else {
-          // If there's no session, clear the profile
           setProfile(null);
         }
         
+        setSession(initialSession);
+
+      } catch (error) {
+        console.error('Error in initial auth setup:', error);
+        setSession(null);
+        setProfile(null);
+      } finally {
+        // 3. No matter what, stop the initial loading process.
         setLoading(false);
+      }
+    };
+
+    // Run the initial setup
+    setupAuth();
+
+    // 4. Set up the listener for any subsequent auth changes (login/logout).
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, newSession) => {
+        // When auth state changes, update the session and re-fetch the profile.
+        setSession(newSession);
       }
     );
 
