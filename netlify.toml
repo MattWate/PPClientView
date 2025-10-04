@@ -1,0 +1,17 @@
+# This is the Netlify configuration file for your PristinePoint project.
+
+[build]
+  # This tells Netlify how to build your site. For a standard Vite project,
+  # this command is 'npm run build' and the output directory is 'dist'.
+  command = "npm run build"
+  publish = "dist"
+
+# This redirect rule is essential for Single Page Applications (SPAs) like React.
+# It ensures that any direct URL request (like from a QR code scan) is
+# correctly handled by your app's main index.html file, allowing React Router
+# to take over and display the correct page.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
