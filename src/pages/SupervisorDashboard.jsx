@@ -1,6 +1,6 @@
-// src/pages/SupervisorDashboard.jsx
 import React, { useCallback, useEffect, useState } from 'react';
-import { supabase } from '../services/supabaseClient';
+import { supabase } from '../services/supabaseClient.js';
+import { useAuth } from '../contexts/AuthContext.jsx';
 
 /** -------- utils -------- */
 const startOfToday = () => { const d = new Date(); d.setHours(0,0,0,0); return d; };
@@ -8,11 +8,11 @@ const startOfTomorrow = () => { const d = startOfToday(); d.setDate(d.getDate()+
 
 /** -------- modal: generate/assign/create tasks for one area -------- */
 const TaskManagementModal = ({
-  area,              // { id, name, zone_id, company_id, required, scheduledTodayCount, tasks, zones: { id, name, sites? } }
+  area,         // { id, name, zone_id, company_id, required, scheduledTodayCount, tasks, zones: { id, name, sites? } }
   isOpen,
   onClose,
   onUpdate,
-  allCleaners,       // <- now already filtered to this area's zone_id
+  allCleaners,  // <- now already filtered to this area's zone_id
   profile
 }) => {
   const [assigneeId, setAssigneeId] = useState('');
@@ -41,6 +41,8 @@ const TaskManagementModal = ({
     setIsSubmitting(true); setError('');
     try {
       const batch = Array.from({ length: tasksToGenerateCount }).map(() => ({
+        // --- THIS IS THE FIX ---
+        // The 'title' column is NOT NULL in the database, so we must provide a value.
         title: `Standard Clean - ${area.name}`,
         description: `Scheduled daily cleaning for ${area.name}.`,
         company_id: area.company_id,
@@ -53,7 +55,7 @@ const TaskManagementModal = ({
       }));
       const { error: insertError } = await supabase.from('tasks').insert(batch);
       if (insertError) throw insertError;
-      onUpdate();
+      onUpdate(); // Refresh the main dashboard data
     } catch (e) {
       console.error(e);
       setError('Failed to generate daily tasks. Please try again.');
@@ -191,9 +193,10 @@ const TaskManagementModal = ({
 };
 
 /** -------- main dashboard -------- */
-export default function SupervisorDashboard({ profile }) {
-  const [zones, setZones] = useState([]);                    // [{ id, name, sites:{id,name}, areas:[...] }]
-  const [zoneCleanersMap, setZoneCleanersMap] = useState({}); // { [zone_id]: [{id, full_name}] }
+export default function SupervisorDashboard() {
+  const { profile } = useAuth();
+  const [zones, setZones] = useState([]);
+  const [zoneCleanersMap, setZoneCleanersMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedArea, setSelectedArea] = useState(null);
@@ -227,7 +230,7 @@ export default function SupervisorDashboard({ profile }) {
 
       const { data: tasksData, error: tasksError } = await supabase
         .from('tasks')
-        .select('id, title, status, area_id, assigned_to, task_type, created_at, zone_id')
+        .select('id, title, status, area_id, assigned_to, task_type, created_at, zone_id, profiles:assigned_to(full_name)')
         .in('zone_id', zoneIds)
         .gte('created_at', start)
         .lt('created_at', end);
@@ -248,7 +251,6 @@ export default function SupervisorDashboard({ profile }) {
       setZones(zonesWithAreas);
 
       // 6) Build zone → cleaners map from zone_assignments + profiles
-      //    a) fetch assignments for these zones
       const { data: za, error: zaErr } = await supabase
         .from('zone_assignments')
         .select('zone_id, user_id')
@@ -273,7 +275,6 @@ export default function SupervisorDashboard({ profile }) {
         const c = cleanersById[row.user_id];
         if (!c) continue;
         if (!map[row.zone_id]) map[row.zone_id] = [];
-        // avoid duplicates
         if (!map[row.zone_id].some(x => x.id === c.id)) map[row.zone_id].push(c);
       }
       setZoneCleanersMap(map);
@@ -329,7 +330,7 @@ export default function SupervisorDashboard({ profile }) {
                           <ul className="list-disc pl-5 space-y-1">
                             {assignedTasks.map(task => (
                               <li key={task.id} className="text-sm text-gray-700">
-                                {task.title} — <span className="font-semibold">{/* lazy name resolve in modal if needed */}</span>
+                                {task.title} — <span className="font-semibold">{task.profiles?.full_name || 'Unknown'}</span>
                               </li>
                             ))}
                           </ul>
@@ -352,7 +353,6 @@ export default function SupervisorDashboard({ profile }) {
         </div>
       </div>
 
-      {/* modal (inject the zone object and zone-specific cleaners) */}
       <TaskManagementModal
         profile={profile}
         area={selectedArea ? { ...selectedArea, zones: zones.find(z => z.id === selectedArea.zone_id) } : null}
@@ -368,3 +368,4 @@ export default function SupervisorDashboard({ profile }) {
     </>
   );
 }
+
