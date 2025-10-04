@@ -1,38 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
-// --- Supabase client initialization to resolve import error ---
-// NOTE: You must replace these with your actual Supabase project URL and anon key
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
-const SUPABASE_URL = 'https://clsirugxuvdyxdnlwqqk.supabase.co'; // Replace with your Supabase URL
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNsc2lydWd4dXZkeXhkbmx3cXFrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUzNDQ2MzgsImV4cCI6MjA3MDkyMDYzOH0.gow7e2mHP_Qa0S0TsCriCfkKZ8jFTXO6ahp0mCstmoU'; // Replace with your Supabase anon key
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+import { supabase } from '../services/supabaseClient.js';
 
-
-// --- AreaEditModal component to resolve import error ---
-const AreaEditModal = ({ area, isOpen, onClose, onUpdate, profile }) => {
+// --- Modal for Editing an Area ---
+const AreaEditModal = ({ area, isOpen, onClose, onUpdateSuccess, profile, areaTypes }) => {
     const [name, setName] = useState('');
     const [areaTypeId, setAreaTypeId] = useState('');
     const [dailyCleaningFrequency, setDailyCleaningFrequency] = useState(0);
-    const [areaTypes, setAreaTypes] = useState([]);
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(false);
-
-    // Fetch area types for the dropdown
-    useEffect(() => {
-        if (isOpen && profile) {
-            const fetchAreaTypes = async () => {
-                const { data, error } = await supabase
-                    .from('area_types')
-                    .select('*')
-                    .eq('company_id', profile.company_id);
-                if (error) {
-                    console.error("Error fetching area types:", error);
-                } else {
-                    setAreaTypes(data || []);
-                }
-            };
-            fetchAreaTypes();
-        }
-    }, [isOpen, profile]);
 
     // Pre-fill the form when an area is selected
     useEffect(() => {
@@ -57,7 +32,6 @@ const AreaEditModal = ({ area, isOpen, onClose, onUpdate, profile }) => {
             daily_cleaning_frequency: dailyCleaningFrequency
         };
 
-        // --- FIX: Remove the .select() call. We will update the UI optimistically. ---
         const { error: updateError } = await supabase
             .from('areas')
             .update(updatePayload)
@@ -68,16 +42,7 @@ const AreaEditModal = ({ area, isOpen, onClose, onUpdate, profile }) => {
         if (updateError) {
             setError(updateError.message);
         } else {
-            // --- FIX: Construct the updated object locally to ensure the UI updates correctly ---
-            const updatedAreaType = areaTypes.find(t => t.id === areaTypeId);
-            
-            const locallyUpdatedArea = {
-                ...area,
-                ...updatePayload,
-                area_types: updatedAreaType || null
-            };
-
-            onUpdate(locallyUpdatedArea);
+            onUpdateSuccess(); // This will trigger a re-fetch in the parent component
             onClose();
         }
     };
@@ -128,14 +93,11 @@ const AreaEditModal = ({ area, isOpen, onClose, onUpdate, profile }) => {
     );
 };
 
-
 // --- QR Code Modal for a single Area ---
 const AreaQRCodeModal = ({ area, isOpen, onClose }) => {
     if (!isOpen || !area) return null;
 
-    const handlePrint = () => {
-        window.print();
-    };
+    const handlePrint = () => window.print();
 
     return (
         <>
@@ -144,11 +106,7 @@ const AreaQRCodeModal = ({ area, isOpen, onClose }) => {
                     @media print {
                         body > *, .modal-overlay > *:not(.modal-content-printable) { display: none !important; }
                         .modal-overlay { background: transparent !important; }
-                        .modal-content-printable {
-                            visibility: visible !important; position: absolute; left: 0; top: 0;
-                            width: 100%; height: 100%; overflow: visible; box-shadow: none;
-                            border: none; display: flex; justify-content: center; align-items: center;
-                        }
+                        .modal-content-printable { visibility: visible !important; position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; box-shadow: none; border: none; display: flex; justify-content: center; align-items: center; }
                         .print-hidden { display: none !important; }
                     }
                 `}
@@ -166,11 +124,11 @@ const AreaQRCodeModal = ({ area, isOpen, onClose }) => {
                             <p className="text-md text-gray-500">Site: {area.siteName}</p>
                         </div>
                         <img
-                            src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=https://pristinepoint.app/task/area/${area.id}`}
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=https://pristinecp.netlify.app/scan/${area.id}`}
                             alt={`QR Code for ${area.name}`}
                             className="w-64 h-64 object-contain"
                         />
-                         <p className="mt-2 text-xs text-gray-500">ID: {area.id}</p>
+                        <p className="mt-2 text-xs text-gray-500">ID: {area.id}</p>
                     </div>
                     <div className="flex justify-end p-4 border-t print-hidden">
                         <button onClick={onClose} className="bg-gray-200 text-gray-700 py-2 px-4 rounded-md mr-2 hover:bg-gray-300">Close</button>
@@ -182,23 +140,29 @@ const AreaQRCodeModal = ({ area, isOpen, onClose }) => {
     );
 };
 
+
+// --- Main Page Component ---
 export default function SitesPage({ profile }) {
     const [sites, setSites] = useState([]);
     const [areaTypes, setAreaTypes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     
+    // State for create forms
     const [newSiteName, setNewSiteName] = useState('');
     const [newZoneName, setNewZoneName] = useState('');
     const [newAreaName, setNewAreaName] = useState('');
     const [selectedAreaTypeId, setSelectedAreaTypeId] = useState('');
 
+    // State for showing create forms conditionally
     const [activeSiteId, setActiveSiteId] = useState(null);
     const [activeZoneId, setActiveZoneId] = useState(null);
 
+    // State for modals
     const [editingArea, setEditingArea] = useState(null);
     const [qrModalArea, setQrModalArea] = useState(null);
 
+    // Fetch all site data for the company
     const fetchFullHierarchy = useCallback(async () => {
         if (!profile) return;
         try {
@@ -206,7 +170,10 @@ export default function SitesPage({ profile }) {
             const { data, error } = await supabase
                 .from('sites')
                 .select('*, zones(*, areas(*, area_types(id, name)))')
-                .eq('company_id', profile.company_id);
+                .eq('company_id', profile.company_id)
+                .order('name', { ascending: true }) // Order sites
+                .order('name', { foreignTable: 'zones', ascending: true }) // Order zones
+                .order('name', { foreignTable: 'zones.areas', ascending: true }); // Order areas
 
             if (error) throw error;
             setSites(data || []);
@@ -232,6 +199,7 @@ export default function SitesPage({ profile }) {
 
     const handleCreate = async (e, type) => {
         e.preventDefault();
+        setError(null);
         let result;
         if (type === 'site') {
             result = await supabase.from('sites').insert({ name: newSiteName, company_id: profile.company_id });
@@ -250,37 +218,22 @@ export default function SitesPage({ profile }) {
         } else {
             setActiveSiteId(null);
             setActiveZoneId(null);
-            fetchFullHierarchy();
+            fetchFullHierarchy(); // Re-fetch all data on success
         }
-    };
-
-    const handleAreaUpdate = (updatedArea) => {
-        setSites(currentSites =>
-            currentSites.map(site => ({
-                ...site,
-                zones: site.zones.map(zone => ({
-                    ...zone,
-                    areas: zone.areas.map(area => {
-                        if (area.id === updatedArea.id) {
-                            return { ...area, ...updatedArea };
-                        }
-                        return area;
-                    })
-                }))
-            }))
-        );
     };
     
     const handleDelete = async (type, id) => {
-        if (!window.confirm(`Are you sure you want to delete this ${type}? This action cannot be undone.`)) return;
+        // A simple confirm dialog is used here. In a real app, you might use a styled modal.
+        if (!confirm(`Are you sure you want to delete this ${type}? This action cannot be undone.`)) return;
         
+        setError(null);
         let result;
         if (type === 'site') result = await supabase.from('sites').delete().eq('id', id);
         else if (type === 'zone') result = await supabase.from('zones').delete().eq('id', id);
         else if (type === 'area') result = await supabase.from('areas').delete().eq('id', id);
         
         if (result.error) setError(result.error.message);
-        else fetchFullHierarchy();
+        else fetchFullHierarchy(); // Re-fetch all data on success
     };
 
     if (loading) return <p>Loading sites...</p>;
@@ -302,22 +255,23 @@ export default function SitesPage({ profile }) {
                                     </div>
                                 </div>
                                 <div className="bg-white p-4 border-t space-y-2">
-                                    {site.zones.map(zone => (
+                                    {(site.zones || []).map(zone => (
                                         <div key={zone.id} className="border rounded-md">
-                                            <div className="w-full flex justify-between items-center p-3 bg-gray-100">
+                                             <div className="w-full flex justify-between items-center p-3 bg-gray-100">
                                                 <span className="font-medium text-gray-700">{zone.name}</span>
                                                 <div>
                                                     <button onClick={() => { setActiveSiteId(site.id); setActiveZoneId(zone.id); }} className="text-xs bg-green-500 hover:bg-green-600 text-white py-1 px-2 rounded-md mr-2">Add Area</button>
                                                     <button onClick={() => handleDelete('zone', zone.id)} className="text-xs bg-red-500 hover:bg-red-600 text-white py-1 px-2 rounded-md">Delete Zone</button>
                                                 </div>
-                                            </div>
-                                            <div className="p-3">
-                                                {zone.areas.length > 0 ? (
+                                             </div>
+                                             <div className="p-3">
+                                                {(zone.areas || []).length > 0 ? (
                                                     <ul className="space-y-1">
-                                                        {zone.areas.map(area => (
+                                                        {(zone.areas).map(area => (
                                                             <li key={area.id} className="flex justify-between items-center text-sm p-1 hover:bg-gray-50 rounded-md">
                                                                 <div>
                                                                     <span>{area.name}</span>
+                                                                    {area.area_types && <span className="ml-2 text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">{area.area_types.name}</span>}
                                                                     {area.daily_cleaning_frequency > 0 && 
                                                                         <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
                                                                             {area.daily_cleaning_frequency}x Daily
@@ -333,7 +287,7 @@ export default function SitesPage({ profile }) {
                                                         ))}
                                                     </ul>
                                                 ) : <p className="text-xs text-gray-500">No areas in this zone.</p>}
-                                            </div>
+                                             </div>
                                         </div>
                                     ))}
                                 </div>
@@ -394,8 +348,9 @@ export default function SitesPage({ profile }) {
                 area={editingArea}
                 isOpen={!!editingArea}
                 onClose={() => setEditingArea(null)}
-                onUpdate={handleAreaUpdate}
+                onUpdateSuccess={fetchFullHierarchy}
                 profile={profile}
+                areaTypes={areaTypes}
             />
 
             <AreaQRCodeModal
