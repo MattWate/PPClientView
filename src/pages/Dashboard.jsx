@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../services/supabaseClient';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext.jsx';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 // --- Reusable, Clickable KPI Card Component ---
 const KpiCard = ({ title, value, icon, color, linkTo }) => {
@@ -24,7 +25,6 @@ const KpiCard = ({ title, value, icon, color, linkTo }) => {
     </div>
   );
 
-  // If a linkTo prop is provided, wrap the card in a Link component
   return linkTo ? <Link to={linkTo}>{cardContent}</Link> : cardContent;
 };
 
@@ -37,6 +37,7 @@ export default function DashboardPage() {
     tasksCompletedToday: 0,
     openIssues: 0,
   });
+  const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -48,24 +49,25 @@ export default function DashboardPage() {
         setLoading(true);
         setError(null);
         
-        // Fetch all KPI data in parallel
         const [
           sitesCount,
           activeStaff,
           tasksCompleted,
           openIssues,
+          completionTrend, // Fetch chart data
         ] = await Promise.all([
           supabase.from('sites').select('*', { count: 'exact', head: true }).eq('company_id', profile.company_id),
           supabase.rpc('count_active_staff', { p_company_id: profile.company_id }),
           supabase.rpc('count_tasks_completed_today', { p_company_id: profile.company_id }),
           supabase.rpc('count_open_issues', { p_company_id: profile.company_id }),
+          supabase.rpc('get_task_completion_trend_7_days', { p_company_id: profile.company_id }),
         ]);
 
-        // Check for errors in each response
         if (sitesCount.error) throw sitesCount.error;
         if (activeStaff.error) throw activeStaff.error;
         if (tasksCompleted.error) throw tasksCompleted.error;
         if (openIssues.error) throw openIssues.error;
+        if (completionTrend.error) throw completionTrend.error;
 
         setStats({
           totalSites: sitesCount.count || 0,
@@ -73,6 +75,13 @@ export default function DashboardPage() {
           tasksCompletedToday: tasksCompleted.data || 0,
           openIssues: openIssues.data || 0,
         });
+        
+        // Format the data for the chart
+        const formattedChartData = (completionTrend.data || []).map(d => ({
+            name: new Date(d.day).toLocaleDateString('en-US', { weekday: 'short' }),
+            Completed: d.count,
+        }));
+        setChartData(formattedChartData);
 
       } catch (err) {
         console.error("Error fetching dashboard data:", err);
@@ -102,8 +111,17 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-lg shadow-md">
           <h3 className="text-xl font-semibold text-gray-800 mb-4">Task Completion Trend (Last 7 Days)</h3>
-          <div className="h-64 flex items-center justify-center text-gray-400">
-            <p>Chart coming soon...</p>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ top: 5, right: 30, left: -10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" stroke="#6b7280" />
+                    <YAxis stroke="#6b7280" allowDecimals={false} />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="Completed" stroke="#10b981" strokeWidth={2} activeDot={{ r: 8 }} />
+                </LineChart>
+            </ResponsiveContainer>
           </div>
         </div>
         <div className="bg-white p-6 rounded-lg shadow-md">
