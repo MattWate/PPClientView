@@ -1,61 +1,82 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../services/supabaseClient';
+import { useAuth } from '../contexts/AuthContext';
 
-export default function DashboardPage({ profile }) {
-  const [stats, setStats] = useState({ completed: 0, issues: 0, active: 0, compliance: 0, sites: 0 });
-  const [recentActivity, setRecentActivity] = useState([]);
-  const [openIssues, setOpenIssues] = useState([]);
+// --- Reusable, Clickable KPI Card Component ---
+const KpiCard = ({ title, value, icon, color, linkTo }) => {
+  const colors = {
+    purple: 'bg-purple-100 text-purple-600',
+    green: 'bg-green-100 text-green-600',
+    red: 'bg-red-100 text-red-600',
+    blue: 'bg-blue-100 text-blue-600',
+  };
+
+  const cardContent = (
+    <div className="bg-white p-6 rounded-lg shadow-md flex items-center justify-between transition-shadow hover:shadow-lg h-full">
+      <div>
+        <p className="text-sm font-medium text-gray-500">{title}</p>
+        <p className="text-3xl font-bold text-gray-800">{value}</p>
+      </div>
+      <div className={`${colors[color]} p-4 rounded-full`}>
+        <i className={`fas ${icon} text-2xl`}></i>
+      </div>
+    </div>
+  );
+
+  // If a linkTo prop is provided, wrap the card in a Link component
+  return linkTo ? <Link to={linkTo}>{cardContent}</Link> : cardContent;
+};
+
+
+export default function DashboardPage() {
+  const { profile } = useAuth();
+  const [stats, setStats] = useState({
+    totalSites: 0,
+    activeStaff: 0,
+    tasksCompletedToday: 0,
+    openIssues: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
-      if (!profile) return;
+      if (!profile?.company_id) return;
+
       try {
         setLoading(true);
+        setError(null);
         
-        const [completed, issues, activity, compliance, sitesCount] = await Promise.all([
-          supabase.rpc('count_tasks_today', { p_company_id: profile.company_id, p_statuses: ['completed', 'verified'] }),
-          supabase.rpc('count_tasks_today', { p_company_id: profile.company_id, p_task_type: 'issue' }),
-          supabase.rpc('count_active_staff_today', { p_company_id: profile.company_id }),
-          supabase.rpc('calculate_compliance_rate', { p_company_id: profile.company_id }),
+        // Fetch all KPI data in parallel
+        const [
+          sitesCount,
+          activeStaff,
+          tasksCompleted,
+          openIssues,
+        ] = await Promise.all([
           supabase.from('sites').select('*', { count: 'exact', head: true }).eq('company_id', profile.company_id),
+          supabase.rpc('count_active_staff', { p_company_id: profile.company_id }),
+          supabase.rpc('count_tasks_completed_today', { p_company_id: profile.company_id }),
+          supabase.rpc('count_open_issues', { p_company_id: profile.company_id }),
         ]);
 
+        // Check for errors in each response
+        if (sitesCount.error) throw sitesCount.error;
+        if (activeStaff.error) throw activeStaff.error;
+        if (tasksCompleted.error) throw tasksCompleted.error;
+        if (openIssues.error) throw openIssues.error;
+
         setStats({
-          completed: completed.data || 0,
-          issues: issues.data || 0,
-          active: activity.data || 0,
-          compliance: compliance.data ? (compliance.data * 100).toFixed(1) : 0,
-          sites: sitesCount.count || 0,
+          totalSites: sitesCount.count || 0,
+          activeStaff: activeStaff.data || 0,
+          tasksCompletedToday: tasksCompleted.data || 0,
+          openIssues: openIssues.data || 0,
         });
 
-        // --- FIX: Fetch recently COMPLETED tasks, not recently created ones ---
-        const { data: tasksData, error: tasksError } = await supabase
-            .from('tasks')
-            .select('*, areas(name, zones(name, sites(name))), profiles:completed_by(full_name)')
-            .eq('company_id', profile.company_id)
-            .in('status', ['completed', 'verified']) // Only show completed/verified tasks
-            .not('completed_at', 'is', null) // Ensure they have a completion date
-            .order('completed_at', { ascending: false }) // Order by completion time
-            .limit(5);
-        if (tasksError) throw tasksError;
-        setRecentActivity(tasksData || []);
-
-
-        // Fetch open issues (no change needed here)
-        const { data: issuesData, error: issuesError } = await supabase
-            .from('tasks')
-            .select('*, areas(name, zones(name, sites(name)))')
-            .eq('company_id', profile.company_id)
-            .eq('task_type', 'issue')
-            .neq('status', 'verified')
-            .order('created_at', { ascending: true });
-        if(issuesError) throw issuesError;
-        setOpenIssues(issuesData || []);
-
-      } catch (error) {
-        setError(error.message);
+      } catch (err) {
+        console.error("Error fetching dashboard data:", err);
+        setError(err.message);
       } finally {
         setLoading(false);
       }
@@ -64,83 +85,46 @@ export default function DashboardPage({ profile }) {
     fetchDashboardData();
   }, [profile]);
 
-  if (loading) return <p>Loading dashboard...</p>;
-  if (error) return <p className="text-red-600">Error: {error}</p>;
+  if (loading) return <p className="p-6">Loading dashboard...</p>;
+  if (error) return <p className="p-6 text-red-600">Error: {error}</p>;
 
   return (
-    <div className="space-y-6">
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
-        <KpiCard title="Total Sites" value={stats.sites} icon="fa-sitemap" color="purple" />
-        <KpiCard title="Tasks Completed Today" value={stats.completed} icon="fa-check-circle" color="green" />
-        <KpiCard title="Issues Reported Today" value={stats.issues} icon="fa-exclamation-triangle" color="red" />
-        <KpiCard title="Staff Active Today" value={stats.active} icon="fa-user-clock" color="blue" />
-        <KpiCard title="Compliance Rate (30d)" value={`${stats.compliance}%`} icon="fa-clipboard-check" color="yellow" />
+    <div className="space-y-8">
+      {/* --- Section 1: Interactive KPI Cards --- */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <KpiCard title="Total Sites" value={stats.totalSites} icon="fa-sitemap" color="purple" linkTo="/sites" />
+        <KpiCard title="Active Staff" value={stats.activeStaff} icon="fa-users" color="blue" linkTo="/staff" />
+        <KpiCard title="Tasks Completed Today" value={stats.tasksCompletedToday} icon="fa-check-circle" color="green" linkTo="/tasks" />
+        <KpiCard title="Open Issues" value={stats.openIssues} icon="fa-exclamation-triangle" color="red" linkTo="/issues" />
       </div>
 
-      {/* Recent Activity & Open Issues */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-md">
-          <h3 className="text-xl font-semibold text-gray-800 mb-4">Recent Activity</h3>
-          <ul className="space-y-4">
-            {recentActivity.length > 0 ? recentActivity.map(task => (
-              <li key={task.id} className="flex items-center space-x-4">
-                <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-full bg-gray-100 text-gray-500">
-                  <i className="fas fa-tasks"></i>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-800">
-                    {/* --- FIX: Display name and dynamic status --- */}
-                    {task.profiles?.full_name || 'System'}{' '}
-                    <span className="font-normal text-gray-600">{task.status === 'verified' ? 'verified' : 'completed'}</span>{' '}
-                    "{task.title}"
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {task.areas?.sites?.name} &gt; {task.areas?.zones?.name} &gt; {task.areas?.name}
-                  </p>
-                </div>
-              </li>
-            )) : (
-              <p className="text-sm text-gray-500">No recent activity to display.</p>
-            )}
-          </ul>
+      {/* --- Section 2: Data Visualization (Charts) --- */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white p-6 rounded-lg shadow-md">
+          <h3 className="text-xl font-semibold text-gray-800 mb-4">Task Completion Trend (Last 7 Days)</h3>
+          <div className="h-64 flex items-center justify-center text-gray-400">
+            <p>Chart coming soon...</p>
+          </div>
         </div>
         <div className="bg-white p-6 rounded-lg shadow-md">
-          <h3 className="text-xl font-semibold text-gray-800 mb-4">Open Issues</h3>
-          <ul className="space-y-3">
-            {openIssues.length > 0 ? openIssues.map(issue => (
-              <li key={issue.id} className="p-3 bg-red-50 rounded-md">
-                <p className="font-semibold text-red-800">{issue.title}</p>
-                <p className="text-xs text-red-600">{issue.areas?.sites?.name} &gt; {issue.areas?.zones?.name} &gt; {issue.areas?.name}</p>
-              </li>
-            )) : (
-                <p className="text-sm text-gray-500">No open issues.</p>
-            )}
-          </ul>
+           <h3 className="text-xl font-semibold text-gray-800 mb-4">Compliance Rate Trend (30d)</h3>
+           <div className="h-64 flex items-center justify-center text-gray-400">
+            <p>Chart coming soon...</p>
+          </div>
         </div>
       </div>
+      
+      {/* --- Section 3: Actionable Reports --- */}
+      <div className="bg-white p-6 rounded-lg shadow-md">
+        <h3 className="text-xl font-semibold text-gray-800 mb-4">Reports</h3>
+        <div className="flex items-center space-x-4">
+            <button className="bg-gray-200 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-300">Generate Site Report</button>
+            <button className="bg-gray-200 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-300">Generate Staff Report</button>
+        </div>
+         <p className="text-sm text-gray-500 mt-2">Reporting engine coming soon...</p>
+      </div>
+
     </div>
   );
 }
-
-const KpiCard = ({ title, value, icon, color }) => {
-  const colors = {
-    green: 'bg-green-100 text-green-600',
-    red: 'bg-red-100 text-red-600',
-    blue: 'bg-blue-100 text-blue-600',
-    yellow: 'bg-yellow-100 text-yellow-600',
-    purple: 'bg-purple-100 text-purple-600',
-  };
-  return (
-    <div className="bg-white p-6 rounded-lg shadow-md flex items-center justify-between">
-      <div>
-        <p className="text-sm font-medium text-gray-500">{title}</p>
-        <p className="text-3xl font-bold text-gray-800">{value}</p>
-      </div>
-      <div className={`${colors[color]} p-3 rounded-full`}>
-        <i className={`fas ${icon} text-2xl`}></i>
-      </div>
-    </div>
-  );
-};
 
