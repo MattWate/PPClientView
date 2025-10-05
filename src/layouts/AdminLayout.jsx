@@ -1,12 +1,11 @@
-// src/layouts/AdminLayout.jsx
 import React, { useEffect, useMemo, useState } from 'react';
-import Sidebar from '../components/common/Sidebar';
-import Header from '../components/common/Header';
-import DashboardPage from '../pages/Dashboard';
-import SitesPage from '../pages/Sites';
-import StaffPage from '../pages/Staff';
-import TasksPage from '../pages/Tasks';
-import AssignmentsPage from '../pages/Assignments';
+import Sidebar from '../components/common/Sidebar.jsx';
+import Header from '../components/common/Header.jsx';
+import DashboardPage from '../pages/Dashboard.jsx';
+import SitesPage from '../pages/Sites.jsx';
+import StaffPage from '../pages/Staff.jsx';
+import TasksPage from '../pages/Tasks.jsx';
+import AssignmentsPage from '../pages/Assignments.jsx';
 
 const validPages = ['dashboard', 'sites', 'staff', 'tasks', 'assignments'];
 
@@ -52,7 +51,7 @@ export default function AdminLayout({ session, profile }) {
     return {
       id: profile?.id ?? session?.user?.id ?? null,
       full_name: profile?.full_name ?? fallbackEmail,
-      role: profile?.role ?? 'admin',      // this layout is for admins
+      role: profile?.role ?? 'admin',     // this layout is for admins
       company_id: profile?.company_id ?? null,
       // keep original fields if present
       ...profile,
@@ -99,7 +98,9 @@ export default function AdminLayout({ session, profile }) {
         return <AssignmentsPage profile={safeProfile} />;
       case 'dashboard':
       default:
-        return <DashboardPage profile={safeProfile} />;
+        // --- THIS IS THE FIX ---
+        // Pass the 'navigate' function to the DashboardPage as the 'setCurrentPage' prop.
+        return <DashboardPage profile={safeProfile} setCurrentPage={navigate} />;
     }
   };
 
@@ -122,3 +123,4 @@ export default function AdminLayout({ session, profile }) {
     </div>
   );
 }
+
