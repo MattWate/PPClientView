@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { supabase } from '../services/supabaseClient';
-import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../services/supabaseClient.js';
+import { useAuth } from '../contexts/AuthContext.jsx';
 
 /** -------- utils -------- */
 const startOfToday = () => { const d = new Date(); d.setHours(0,0,0,0); return d; };
@@ -199,44 +199,30 @@ export default function SupervisorDashboard() {
   const [zoneCleanersMap, setZoneCleanersMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedArea, setSelectedArea] = useState(null);
+  
+  const [selectedAreaId, setSelectedAreaId] = useState(null);
 
   const fetchData = useCallback(async () => {
     if (!profile?.id || !profile?.company_id) return;
     try {
-      setLoading(true); setError(null);
+      setLoading(true); 
+      setError(null);
 
-      // 1) Zones assigned to this supervisor
-      const { data: assignedZones, error: zonesError } = await supabase
-        .from('zone_assignments')
-        .select('zones!inner(*, sites(*))')
-        .eq('user_id', profile.id);
+      const { data: assignedZones, error: zonesError } = await supabase.from('zone_assignments').select('zones!inner(*, sites(*))').eq('user_id', profile.id);
       if (zonesError) throw zonesError;
 
       const supervisorZones = (assignedZones || []).map(z => z.zones).filter(Boolean);
       const zoneIds = supervisorZones.map(z => z.id);
       if (zoneIds.length === 0) { setZones([]); setZoneCleanersMap({}); setLoading(false); return; }
 
-      // 2) Areas (include daily_cleaning_frequency)
-      const { data: areasData, error: areasError } = await supabase
-        .from('areas')
-        .select('id, name, zone_id, company_id, daily_cleaning_frequency')
-        .in('zone_id', zoneIds);
+      const { data: areasData, error: areasError } = await supabase.from('areas').select('id, name, zone_id, company_id, daily_cleaning_frequency').in('zone_id', zoneIds);
       if (areasError) throw areasError;
 
-      // 3) Today's tasks
       const start = startOfToday().toISOString();
       const end = startOfTomorrow().toISOString();
-
-      const { data: tasksData, error: tasksError } = await supabase
-        .from('tasks')
-        .select('id, title, status, area_id, assigned_to, task_type, created_at, zone_id, profiles:assigned_to(full_name)')
-        .in('zone_id', zoneIds)
-        .gte('created_at', start)
-        .lt('created_at', end);
+      const { data: tasksData, error: tasksError } = await supabase.from('tasks').select('id, title, status, area_id, assigned_to, task_type, created_at, zone_id, profiles:assigned_to(full_name)').in('zone_id', zoneIds).gte('created_at', start).lt('created_at', end);
       if (tasksError) throw tasksError;
 
-      // 4) Attach tasks + computed counts to areas
       const areasWithMeta = (areasData || []).map(area => {
         const tasks = (tasksData || []).filter(t => t.area_id === area.id);
         const scheduledTodayCount = tasks.filter(t => t.task_type === 'scheduled').length;
@@ -245,27 +231,17 @@ export default function SupervisorDashboard() {
         return { ...area, tasks, scheduledTodayCount, required, remaining };
       });
 
-      // 5) Group by zone and hydrate zones list
       const areasByZone = areasWithMeta.reduce((acc, a) => { (acc[a.zone_id] ||= []).push(a); return acc; }, {});
       const zonesWithAreas = supervisorZones.map(zone => ({ ...zone, areas: areasByZone[zone.id] || [] }));
       setZones(zonesWithAreas);
 
-      // 6) Build zone → cleaners map from zone_assignments + profiles
-      const { data: za, error: zaErr } = await supabase
-        .from('zone_assignments')
-        .select('zone_id, user_id')
-        .in('zone_id', zoneIds);
+      const { data: za, error: zaErr } = await supabase.from('zone_assignments').select('zone_id, user_id').in('zone_id', zoneIds);
       if (zaErr) throw zaErr;
 
       const cleanerIds = Array.from(new Set((za || []).map(r => r.user_id)));
       let cleanersById = {};
       if (cleanerIds.length > 0) {
-        const { data: cleaners, error: cleanersErr } = await supabase
-          .from('profiles')
-          .select('id, full_name, role, company_id')
-          .in('id', cleanerIds)
-          .eq('role', 'cleaner')
-          .eq('company_id', profile.company_id);
+        const { data: cleaners, error: cleanersErr } = await supabase.from('profiles').select('id, full_name, role, company_id').in('id', cleanerIds).eq('role', 'cleaner').eq('company_id', profile.company_id);
         if (cleanersErr) throw cleanersErr;
         cleanersById = (cleaners || []).reduce((acc, c) => { acc[c.id] = { id: c.id, full_name: c.full_name || 'Unnamed' }; return acc; }, {});
       }
@@ -278,6 +254,7 @@ export default function SupervisorDashboard() {
         if (!map[row.zone_id].some(x => x.id === c.id)) map[row.zone_id].push(c);
       }
       setZoneCleanersMap(map);
+
     } catch (e) {
       console.error('Error fetching supervisor data:', e);
       setError(e.message);
@@ -287,6 +264,10 @@ export default function SupervisorDashboard() {
   }, [profile]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  const selectedArea = selectedAreaId 
+    ? zones.flatMap(z => z.areas || []).find(a => a.id === selectedAreaId) 
+    : null;
 
   if (loading) return <div className="p-6">Loading dashboard…</div>;
   if (error)   return <div className="p-6 text-red-600">Error: {error}</div>;
@@ -305,7 +286,6 @@ export default function SupervisorDashboard() {
                   const assignedTasks = area.tasks.filter(t => t.status === 'assigned');
                   return (
                     <div key={area.id} className="border rounded-md p-4 bg-gray-50">
-                      {/* --- FIX: Responsive Layout --- */}
                       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                         <div>
                           <p className="font-semibold text-gray-800">{area.name}</p>
@@ -316,7 +296,7 @@ export default function SupervisorDashboard() {
                           </p>
                         </div>
                         <button
-                          onClick={() => setSelectedArea({ ...area })}
+                          onClick={() => setSelectedAreaId(area.id)}
                           className="bg-blue-500 text-white py-2 px-4 text-sm rounded-md hover:bg-blue-600 w-full sm:w-auto"
                         >
                           Manage ({area.remaining} Remaining)
@@ -348,7 +328,7 @@ export default function SupervisorDashboard() {
         profile={profile}
         area={selectedArea ? { ...selectedArea, zones: zones.find(z => z.id === selectedArea.zone_id) } : null}
         isOpen={!!selectedArea}
-        onClose={() => setSelectedArea(null)}
+        onClose={() => setSelectedAreaId(null)}
         onUpdate={fetchData}
         allCleaners={selectedArea ? (zoneCleanersMap[selectedArea.zone_id] || []) : []}
       />
