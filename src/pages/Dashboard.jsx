@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../services/supabaseClient';
-import { useAuth } from '../contexts/AuthContext.jsx';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { useAuth } from '../contexts/AuthContext';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
 // --- Reusable, Clickable KPI Card Component ---
 const KpiCard = ({ title, value, icon, color, linkTo }) => {
@@ -37,7 +37,8 @@ export default function DashboardPage() {
     tasksCompletedToday: 0,
     openIssues: 0,
   });
-  const [chartData, setChartData] = useState([]);
+  const [completionChartData, setCompletionChartData] = useState([]);
+  const [complianceChartData, setComplianceChartData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -54,20 +55,20 @@ export default function DashboardPage() {
           activeStaff,
           tasksCompleted,
           openIssues,
-          completionTrend, // Fetch chart data
+          completionTrend,
+          complianceTrend, // Fetch new compliance data
         ] = await Promise.all([
           supabase.from('sites').select('*', { count: 'exact', head: true }).eq('company_id', profile.company_id),
           supabase.rpc('count_active_staff', { p_company_id: profile.company_id }),
           supabase.rpc('count_tasks_completed_today', { p_company_id: profile.company_id }),
           supabase.rpc('count_open_issues', { p_company_id: profile.company_id }),
           supabase.rpc('get_task_completion_trend_7_days', { p_company_id: profile.company_id }),
+          supabase.rpc('get_compliance_trend_30_days', { p_company_id: profile.company_id }),
         ]);
 
-        if (sitesCount.error) throw sitesCount.error;
-        if (activeStaff.error) throw activeStaff.error;
-        if (tasksCompleted.error) throw tasksCompleted.error;
-        if (openIssues.error) throw openIssues.error;
-        if (completionTrend.error) throw completionTrend.error;
+        // Check for errors in each response
+        const errors = [sitesCount, activeStaff, tasksCompleted, openIssues, completionTrend, complianceTrend].filter(res => res.error);
+        if (errors.length > 0) throw errors[0].error;
 
         setStats({
           totalSites: sitesCount.count || 0,
@@ -76,12 +77,16 @@ export default function DashboardPage() {
           openIssues: openIssues.data || 0,
         });
         
-        // Format the data for the chart
-        const formattedChartData = (completionTrend.data || []).map(d => ({
-            name: new Date(d.day).toLocaleDateString('en-US', { weekday: 'short' }),
+        // Format data for both charts
+        setCompletionChartData((completionTrend.data || []).map(d => ({
+            name: new Date(d.day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
             Completed: d.count,
-        }));
-        setChartData(formattedChartData);
+        })));
+
+        setComplianceChartData((complianceTrend.data || []).map(d => ({
+            name: new Date(d.day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            Compliance: parseFloat((d.rate * 100).toFixed(1)),
+        })));
 
       } catch (err) {
         console.error("Error fetching dashboard data:", err);
@@ -113,7 +118,7 @@ export default function DashboardPage() {
           <h3 className="text-xl font-semibold text-gray-800 mb-4">Task Completion Trend (Last 7 Days)</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 5, right: 30, left: -10, bottom: 5 }}>
+                <LineChart data={completionChartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" stroke="#6b7280" />
                     <YAxis stroke="#6b7280" allowDecimals={false} />
@@ -126,9 +131,17 @@ export default function DashboardPage() {
         </div>
         <div className="bg-white p-6 rounded-lg shadow-md">
            <h3 className="text-xl font-semibold text-gray-800 mb-4">Compliance Rate Trend (30d)</h3>
-           <div className="h-64 flex items-center justify-center text-gray-400">
-            <p>Chart coming soon...</p>
-          </div>
+           <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={complianceChartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" stroke="#6b7280" tick={{ fontSize: 10 }} />
+                    <YAxis stroke="#6b7280" unit="%" domain={[0, 100]} />
+                    <Tooltip formatter={(value) => `${value}%`} />
+                    <Bar dataKey="Compliance" fill="#8884d8" />
+                </BarChart>
+            </ResponsiveContainer>
+           </div>
         </div>
       </div>
       
