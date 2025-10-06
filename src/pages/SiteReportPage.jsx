@@ -22,7 +22,7 @@ export default function SiteReportPage() {
                 return;
             }
 
-            const { data, error }_ = await supabase.rpc('get_site_report_data', {
+            const { data, error } = await supabase.rpc('get_site_report_data', {
                 p_site_id: siteId,
                 p_start_date: startDate,
                 p_end_date: endDate
