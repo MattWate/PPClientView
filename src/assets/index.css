@@ -1,3 +1,19 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* V V V ADD THIS CSS AT THE END OF THE FILE V V V */
+
+@media print {
+  /* This class will hide any element when printing */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Optional: remove shadow and ensure full width on print */
+  .report-container {
+    box-shadow: none !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+  }
+}
