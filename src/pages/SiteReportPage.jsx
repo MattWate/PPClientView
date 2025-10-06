@@ -1,11 +1,12 @@
 // src/pages/SiteReportPage.jsx
 
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom'; // <-- 1. Import useNavigate
 import { supabase } from '../services/supabaseClient'; // Adjust path if needed
 
 export default function SiteReportPage() {
     const [searchParams] = useSearchParams();
+    const navigate = useNavigate(); // <-- 2. Initialize the navigate function
     const [reportData, setReportData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -47,9 +48,20 @@ export default function SiteReportPage() {
     return (
         <div className="bg-white p-8 max-w-4xl mx-auto my-10 shadow-lg report-container">
             <header className="border-b pb-4 mb-6">
-                <h1 className="text-3xl font-bold">Site Compliance Report</h1>
-                <h2 className="text-xl text-gray-700">{reportData.site.name}</h2>
-                <p className="text-sm text-gray-500">{reportData.site.address}</p>
+                {/* V V V 3. ADDED THIS WRAPPER AND BUTTON V V V */}
+                <div className="flex justify-between items-start">
+                    <div>
+                        <h1 className="text-3xl font-bold">Site Compliance Report</h1>
+                        <h2 className="text-xl text-gray-700 mt-1">{reportData.site.name}</h2>
+                    </div>
+                    <button 
+                        onClick={() => navigate(-1)} 
+                        className="no-print bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300 transition-colors"
+                    >
+                        &larr; Back to Dashboard
+                    </button>
+                </div>
+                <p className="text-sm text-gray-500 mt-2">{reportData.site.address}</p>
                 <p className="font-semibold mt-2">Period: {startDate} to {endDate}</p>
             </header>
 
