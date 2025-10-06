@@ -27,6 +27,60 @@ const KpiCard = ({ title, value, icon, color, linkTo }) => {
   return linkTo ? <Link to={linkTo}>{cardContent}</Link> : cardContent;
 };
 
+// --- Modal for Generating Reports ---
+const ReportGeneratorModal = ({ isOpen, onClose, sites }) => {
+    const [selectedSiteId, setSelectedSiteId] = useState('');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
+
+    const handleGenerateReport = () => {
+        if (!selectedSiteId || !startDate || !endDate) {
+            alert('Please select a site and a date range.');
+            return;
+        }
+        // In a real implementation, this would navigate to a new, print-friendly page
+        // or trigger a PDF generation service.
+        alert(`Generating report for site ${selectedSiteId} from ${startDate} to ${endDate}.`);
+        onClose();
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center">
+            <div className="bg-white rounded-lg shadow-xl max-w-lg w-full m-4">
+                <div className="p-6 border-b">
+                    <h3 className="text-xl font-semibold">Generate Site Compliance Report</h3>
+                </div>
+                <div className="p-6 space-y-4">
+                    <div>
+                        <label className="text-sm font-medium text-gray-700">Select Site</label>
+                        <select value={selectedSiteId} onChange={e => setSelectedSiteId(e.target.value)} className="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm">
+                            <option value="" disabled>Choose a site...</option>
+                            {sites.map(site => <option key={site.id} value={site.id}>{site.name}</option>)}
+                        </select>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-sm font-medium text-gray-700">Start Date</label>
+                            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm" />
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium text-gray-700">End Date</label>
+                            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm" />
+                        </div>
+                    </div>
+                </div>
+                <div className="flex justify-end p-4 bg-gray-50 rounded-b-lg space-x-2">
+                    <button onClick={onClose} className="bg-gray-200 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-300">Cancel</button>
+                    <button onClick={handleGenerateReport} className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700">Generate Report</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
 export default function DashboardPage() {
   const { profile } = useAuth();
   const [stats, setStats] = useState({ totalSites: 0, activeStaff: 0, tasksCompletedToday: 0, openIssues: 0 });
@@ -41,7 +95,8 @@ export default function DashboardPage() {
   const [selectedSupervisorId, setSelectedSupervisorId] = useState('all');
   const [slaThreshold, setSlaThreshold] = useState(90);
 
-  // Effect to fetch the list of sites and supervisors for the filter dropdowns
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+
   useEffect(() => {
     const fetchFilterData = async () => {
       if (!profile?.company_id) return;
@@ -60,8 +115,6 @@ export default function DashboardPage() {
     fetchFilterData();
   }, [profile]);
 
-
-  // Main data fetching effect, now sensitive to filter changes
   useEffect(() => {
     const fetchDashboardData = async () => {
       if (!profile?.company_id) return;
@@ -118,80 +171,62 @@ export default function DashboardPage() {
   if (error) return <p className="p-6 text-red-600">Error: {error}</p>;
 
   return (
-    <div className="space-y-8">
-        <div className="bg-white p-4 rounded-lg shadow-md flex flex-col sm:flex-row gap-4 items-center">
-            <div className="flex-1 w-full sm:w-auto">
-                <label className="text-sm font-medium text-gray-700">Filter by Site</label>
-                <select value={selectedSiteId} onChange={e => setSelectedSiteId(e.target.value)} className="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm">
-                    <option value="all">All Sites</option>
-                    {sites.map(site => <option key={site.id} value={site.id}>{site.name}</option>)}
-                </select>
+    <>
+        <div className="space-y-8">
+            <div className="bg-white p-4 rounded-lg shadow-md flex flex-col sm:flex-row gap-4 items-center">
+                <div className="flex-1 w-full sm:w-auto">
+                    <label className="text-sm font-medium text-gray-700">Filter by Site</label>
+                    <select value={selectedSiteId} onChange={e => setSelectedSiteId(e.target.value)} className="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm">
+                        <option value="all">All Sites</option>
+                        {sites.map(site => <option key={site.id} value={site.id}>{site.name}</option>)}
+                    </select>
+                </div>
+                <div className="flex-1 w-full sm:w-auto">
+                    <label className="text-sm font-medium text-gray-700">Filter by Supervisor</label>
+                    <select value={selectedSupervisorId} onChange={e => setSelectedSupervisorId(e.target.value)} className="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm">
+                        <option value="all">All Supervisors</option>
+                        {supervisors.map(sup => <option key={sup.id} value={sup.id}>{sup.full_name}</option>)}
+                    </select>
+                </div>
+                <div className="flex-1 w-full sm:w-auto">
+                    <label htmlFor="sla" className="text-sm font-medium text-gray-700">Compliance SLA: {slaThreshold}%</label>
+                    <input id="sla" type="range" min="50" max="100" value={slaThreshold} onChange={e => setSlaThreshold(parseInt(e.target.value, 10))} className="w-full mt-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"/>
+                </div>
             </div>
-            <div className="flex-1 w-full sm:w-auto">
-                <label className="text-sm font-medium text-gray-700">Filter by Supervisor</label>
-                <select value={selectedSupervisorId} onChange={e => setSelectedSupervisorId(e.target.value)} className="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm">
-                    <option value="all">All Supervisors</option>
-                    {supervisors.map(sup => <option key={sup.id} value={sup.id}>{sup.full_name}</option>)}
-                </select>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <KpiCard title="Total Sites" value={stats.totalSites} icon="fa-sitemap" color="purple" linkTo="/sites" />
+                <KpiCard title="Active Staff" value={stats.activeStaff} icon="fa-users" color="blue" linkTo="/staff" />
+                <KpiCard title="Tasks Completed Today" value={stats.tasksCompletedToday} icon="fa-check-circle" color="green" linkTo="/tasks" />
+                <KpiCard title="Open Issues" value={stats.openIssues} icon="fa-exclamation-triangle" color="red" linkTo="/issues" />
             </div>
-             <div className="flex-1 w-full sm:w-auto">
-                <label htmlFor="sla" className="text-sm font-medium text-gray-700">Compliance SLA: {slaThreshold}%</label>
-                <input id="sla" type="range" min="50" max="100" value={slaThreshold} onChange={e => setSlaThreshold(parseInt(e.target.value, 10))} className="w-full mt-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"/>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white p-6 rounded-lg shadow-md">
+                    <h3 className="text-xl font-semibold text-gray-800 mb-4">Task Completion Trend (Last 7 Days)</h3>
+                    <div className="h-64"><ResponsiveContainer width="100%" height="100%"><LineChart data={completionChartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" stroke="#6b7280" /><YAxis stroke="#6b7280" allowDecimals={false} /><Tooltip /><Legend /><Line type="monotone" dataKey="Completed" stroke="#10b981" strokeWidth={2} activeDot={{ r: 8 }} /></LineChart></ResponsiveContainer></div>
+                </div>
+                <div className="bg-white p-6 rounded-lg shadow-md">
+                    <h3 className="text-xl font-semibold text-gray-800 mb-4">Compliance Rate Trend (30d)</h3>
+                    <div className="h-64"><ResponsiveContainer width="100%" height="100%"><BarChart data={complianceChartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" stroke="#6b7280" tick={{ fontSize: 10 }} /><YAxis stroke="#6b7280" unit="%" domain={[0, 100]} /><Tooltip formatter={(value) => `${value}%`} /><Bar dataKey="Compliance">{complianceChartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.Compliance < slaThreshold ? '#f97316' : '#8884d8'} />))}</Bar></BarChart></ResponsiveContainer></div>
+                </div>
+            </div>
+            
+            <div className="bg-white p-6 rounded-lg shadow-md">
+                <h3 className="text-xl font-semibold text-gray-800 mb-4">Reports</h3>
+                <div className="flex items-center space-x-4">
+                    <button onClick={() => setIsReportModalOpen(true)} className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700">Generate Site Report</button>
+                    <button className="bg-gray-200 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-300">Generate Staff Report</button>
+                </div>
             </div>
         </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <KpiCard title="Total Sites" value={stats.totalSites} icon="fa-sitemap" color="purple" linkTo="/sites" />
-        <KpiCard title="Active Staff" value={stats.activeStaff} icon="fa-users" color="blue" linkTo="/staff" />
-        <KpiCard title="Tasks Completed Today" value={stats.tasksCompletedToday} icon="fa-check-circle" color="green" linkTo="/tasks" />
-        <KpiCard title="Open Issues" value={stats.openIssues} icon="fa-exclamation-triangle" color="red" linkTo="/issues" />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <h3 className="text-xl font-semibold text-gray-800 mb-4">Task Completion Trend (Last 7 Days)</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={completionChartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" stroke="#6b7280" />
-                    <YAxis stroke="#6b7280" allowDecimals={false} />
-                    <Tooltip />
-                    <Legend />
-                    <Line type="monotone" dataKey="Completed" stroke="#10b981" strokeWidth={2} activeDot={{ r: 8 }} />
-                </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-lg shadow-md">
-           <h3 className="text-xl font-semibold text-gray-800 mb-4">Compliance Rate Trend (30d)</h3>
-           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={complianceChartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" stroke="#6b7280" tick={{ fontSize: 10 }} />
-                    <YAxis stroke="#6b7280" unit="%" domain={[0, 100]} />
-                    <Tooltip formatter={(value) => `${value}%`} />
-                    <Bar dataKey="Compliance">
-                        {complianceChartData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.Compliance < slaThreshold ? '#f97316' : '#8884d8'} />
-                        ))}
-                    </Bar>
-                </BarChart>
-            </ResponsiveContainer>
-           </div>
-        </div>
-      </div>
-      
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <h3 className="text-xl font-semibold text-gray-800 mb-4">Reports</h3>
-        <div className="flex items-center space-x-4">
-            <button className="bg-gray-200 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-300">Generate Site Report</button>
-            <button className="bg-gray-200 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-300">Generate Staff Report</button>
-        </div>
-         <p className="text-sm text-gray-500 mt-2">Reporting engine coming soon...</p>
-      </div>
-    </div>
+        <ReportGeneratorModal
+            isOpen={isReportModalOpen}
+            onClose={() => setIsReportModalOpen(false)}
+            sites={sites}
+        />
+    </>
   );
 }
 
