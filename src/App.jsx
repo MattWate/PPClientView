@@ -1,48 +1,84 @@
 import React from 'react';
-import { Routes, Route, Link, HashRouter as Router } from 'react-router-dom';
+import { Routes, Route, Link } from 'react-router-dom';
 
-// --- Simplified Diagnostic App ---
-// All mock components have been removed to focus on the core routing issue.
+// --- Mocks & Placeholders for Single-File Compilation ---
+// In your real project, these would be imported from their respective files.
+const useAuth = () => ({ session: null, profile: null, loading: false });
+const supabase = { auth: { signOut: () => alert('Signing out...') } };
+
+const PublicHomePage = () => <div className="p-8"><h1 className="text-3xl font-bold">Public Home Page</h1><Link to="/login" className="text-blue-600 hover:underline">Go to Login</Link></div>;
+const LoginPage = () => <div className="p-8"><h1 className="text-3xl font-bold">Login Page</h1></div>;
+const AdminLayout = () => <div className="p-8"><h1 className="text-3xl font-bold">Admin Dashboard</h1></div>;
+const SupervisorLayout = () => <div className="p-8"><h1 className="text-3xl font-bold">Supervisor Dashboard</h1></div>;
+const CleanerLayout = () => <div className="p-8"><h1 className="text-3xl font-bold">Cleaner Dashboard</h1></div>;
+const ScanHandlerPage = () => <div className="p-8"><h1 className="text-3xl font-bold">Scan Handler</h1></div>;
+const PublicScanPage = () => <div className="p-8"><h1 className="text-3xl font-bold">Public Scan Page</h1></div>;
+const CleanerAreaView = () => <div className="p-8"><h1 className="text-3xl font-bold">Cleaner Area View</h1></div>;
+const SupervisorAreaView = () => <div className="p-8"><h1 className="text-3xl font-bold">Supervisor Area View</h1></div>;
+const SiteReportPage = () => <div className="p-8"><h1 className="text-3xl font-bold">Site Report Page</h1></div>;
+// --- End Mocks ---
+
+const LoadingScreen = () => (
+    <div className="flex items-center justify-center h-screen bg-gray-100">
+        <p className="text-gray-600">Loading...</p>
+    </div>
+);
+
+const ProfileNotFound = () => (
+    <div className="flex flex-col items-center justify-center h-screen bg-gray-100 p-4 text-center">
+        <h2 className="text-2xl font-bold text-red-600 mb-2">Profile Not Found</h2>
+        <p className="text-gray-700 mb-4">Your user profile could not be loaded.</p>
+        <button
+            onClick={() => supabase.auth.signOut()}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+        >
+            Sign Out
+        </button>
+    </div>
+);
+
+const MainDashboard = () => {
+    const { session, profile } = useAuth();
+    if (!profile) return <ProfileNotFound />;
+
+    switch (profile.role) {
+        case 'admin':
+            return <AdminLayout session={session} profile={profile} />;
+        case 'supervisor':
+            return <SupervisorLayout session={session} profile={profile} />;
+        case 'cleaner':
+            return <CleanerLayout session={session} profile={profile} />;
+        default:
+            return <ProfileNotFound />;
+    }
+};
 
 export default function App() {
-    return (
-        <Router>
-            {/* STEP 1: Test the Router.
-                This div is OUTSIDE the <Routes> block. If you can see this text,
-                it means the Router component is working correctly and the problem
-                is inside the <Routes> component below. 
-            */}
-            <div style={{ padding: '2rem', border: '2px solid red', margin: '1rem' }}>
-                <h1 style={{ fontSize: '2rem', fontWeight: 'bold' }}>Router Test Area</h1>
-                <p>If you can see this red box, the Router has mounted successfully.</p>
-                <nav>
-                    <Link to="/" style={{ marginRight: '1rem', color: 'blue' }}>Go to Home</Link>
-                    <Link to="/login" style={{ color: 'blue' }}>Go to Login</Link>
-                </nav>
-            </div>
+    const { session, profile, loading } = useAuth();
 
-            {/* STEP 2: Test the Routes.
-                This block will only render the correct component if the path matches.
-                If you see the red box but not the text below, the issue is with
-                how the routes are matching the URL.
-            */}
-            <div style={{ padding: '2rem', border: '2px solid green', margin: '1rem' }}>
-                 <Routes>
-                    <Route path="/" element={
-                        <div>
-                            <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Home Page Route</h2>
-                            <p>This component is rendered because the path is "/"</p>
-                        </div>
-                    } />
-                    <Route path="/login" element={
-                        <div>
-                            <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Login Page Route</h2>
-                             <p>This component is rendered because the path is "/login"</p>
-                        </div>
-                    } />
+    if (loading) {
+        return <LoadingScreen />;
+    }
+
+    return (
+        <>
+            {session && profile ? (
+                <Routes>
+                    <Route path="/" element={<MainDashboard />} />
+                    <Route path="/scan/:areaId" element={<ScanHandlerPage />} />
+                    <Route path="/cleaner-view/:areaId" element={<CleanerAreaView />} />
+                    <Route path="/supervisor-view/:areaId" element={<SupervisorAreaView />} />
+                    <Route path="/report/site" element={<SiteReportPage />} />
                 </Routes>
-            </div>
-        </Router>
+            ) : (
+                <Routes>
+                    <Route path="/" element={<PublicHomePage />} />
+                    <Route path="/login" element={<LoginPage />} />
+                    <Route path="/scan/:areaId" element={<ScanHandlerPage />} />
+                    <Route path="/public-scan/:areaId" element={<PublicScanPage />} />
+                </Routes>
+            )}
+        </>
     );
 }
 
