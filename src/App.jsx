@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, Link, BrowserRouter } from 'react-router-dom';
+import { Routes, Route, Link, HashRouter } from 'react-router-dom'; // Correctly import HashRouter
 
 // --- Mocks & Placeholders for Single-File Compilation ---
 // In a real multi-file app, these would be imported. We are defining them
@@ -86,10 +86,9 @@ export default function App() {
     }
 
     // This logic determines which set of routes to show based on login status.
-    // NOTE: Because a Router is needed to make Links and Routes work, we wrap the
-    // content in <BrowserRouter>. In your local setup, this is likely in main.jsx.
+    // The component is now correctly wrapped in <HashRouter>.
     return (
-        <BrowserRouter>
+        <HashRouter>
             {session && profile ? (
                 // Authenticated Routes
                 <Routes>
@@ -108,7 +107,7 @@ export default function App() {
                     <Route path="/public-scan/:areaId" element={<PublicScanPage />} />
                 </Routes>
             )}
-        </BrowserRouter>
+        </HashRouter>
     );
 }
 
