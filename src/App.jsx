@@ -1,20 +1,14 @@
 import React from 'react';
-import { Routes, Route, Link, HashRouter } from 'react-router-dom'; // Correctly import HashRouter
+import { Routes, Route, Link } from 'react-router-dom'; // Removed HashRouter from here
 
 // --- Mocks & Placeholders for Single-File Compilation ---
-// In a real multi-file app, these would be imported. We are defining them
-// here to create a runnable, self-contained application for this environment.
-
 const supabase = {
   auth: {
     signOut: () => alert('Signing out...'),
   }
 };
 
-// Mock Auth Context Hook
 const useAuth = () => {
-    // To test the logged-in state, change this return value.
-    // For example: return { session: { user: {} }, profile: { role: 'admin' }, loading: false };
     return { session: null, profile: null, loading: false };
 };
 
@@ -36,9 +30,7 @@ const CleanerAreaView = () => <div className="p-8"><h1 className="text-3xl font-
 const SupervisorAreaView = () => <div className="p-8"><h1 className="text-3xl font-bold">Supervisor Area View</h1></div>;
 const SiteReportPage = () => <div className="p-8"><h1 className="text-3xl font-bold">Site Report Page</h1></div>;
 
-
-// --- Helper Components from Original App.jsx ---
-
+// --- Helper Components ---
 const LoadingScreen = () => (
     <div className="flex items-center justify-center h-screen bg-gray-100">
         <p className="text-gray-600">Loading...</p>
@@ -49,7 +41,7 @@ const ProfileNotFound = () => (
     <div className="flex flex-col items-center justify-center h-screen bg-gray-100 p-4 text-center">
         <h2 className="text-2xl font-bold text-red-600 mb-2">Profile Not Found</h2>
         <p className="text-gray-700 mb-4">
-            Your user profile could not be loaded. This may be due to a permissions issue (RLS).
+            Your user profile could not be loaded.
         </p>
         <button
             onClick={() => supabase.auth.signOut()}
@@ -77,7 +69,6 @@ const MainDashboard = () => {
 };
 
 // --- Main App Component ---
-
 export default function App() {
     const { session, profile, loading } = useAuth();
 
@@ -85,10 +76,10 @@ export default function App() {
         return <LoadingScreen />;
     }
 
-    // This logic determines which set of routes to show based on login status.
-    // The component is now correctly wrapped in <HashRouter>.
+    // The <HashRouter> has been removed from here. This component now only defines
+    // which set of routes should be active based on the auth state.
     return (
-        <HashRouter>
+        <>
             {session && profile ? (
                 // Authenticated Routes
                 <Routes>
@@ -107,7 +98,7 @@ export default function App() {
                     <Route path="/public-scan/:areaId" element={<PublicScanPage />} />
                 </Routes>
             )}
-        </HashRouter>
+        </>
     );
 }
 
