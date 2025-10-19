@@ -1,41 +1,99 @@
 // src/pages/PublicHomePage.jsx
-import React from 'react';
+import React, { useState } from 'react';
 
-// --- Mocks for Single-File Compilation ---
-// In a real multi-file app, these would be imported from separate files.
-// We are mocking them here to make this component runnable on its own.
+// --- Mocks & Components for Single-File Compilation ---
+// To resolve build errors in this environment, dependencies from other files
+// are included directly here. In your multi-file project, you would use imports.
 
 const useAuth = () => ({
-    session: null, // or { user: { email: 'test@example.com' } } to test logged-in state
-    loading: false,
+  session: null, // Change to a mock session object to test the logged-in view
+  loading: false,
 });
 
 const supabase = {
-    auth: {
-        signOut: () => {
-            alert('Signing out...');
-            // In a real app, this would handle the sign-out logic
-        }
+  auth: {
+    signInWithPassword: async ({ email, password }) => {
+      alert(`Attempting to sign in with email: ${email}`);
+      // In a real app, this would be a network request.
+      // We'll simulate an error for demonstration.
+      if (password !== 'password') {
+          return { error: { message: 'Invalid password. Try "password".' } };
+      }
+      return { error: null };
+    },
+    signOut: () => {
+      alert('Signing out...');
     }
+  }
 };
 
-const LoginPage = () => (
-    <div className="bg-white p-8 rounded-lg shadow-md">
-        <h3 className="text-2xl font-bold text-center mb-6">Client Login</h3>
-        <form className="space-y-4">
-            <div>
-                <label className="block text-sm font-medium text-gray-700">Email Address</label>
-                <input type="email" className="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm" placeholder="you@example.com" />
+// This is the functional LoginPage component, now included directly
+const LoginPage = () => {
+    const [loading, setLoading] = useState(false);
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState(null);
+
+    const handleLogin = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        setError(null);
+        try {
+            const { error } = await supabase.auth.signInWithPassword({ email, password });
+            if (error) throw error;
+            alert('Login successful! (In real app, you would be redirected)');
+        } catch (error) {
+            setError(error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="bg-white p-8 rounded-lg shadow-md w-full">
+            <div className="text-center mb-6">
+                 <span className="text-4xl text-indigo-600">💎</span>
+                 <h1 className="text-2xl font-bold text-gray-900 mt-2">PristinePoint</h1>
+                 <p className="text-gray-600">Client Portal</p>
             </div>
-            <div>
-                <label className="block text-sm font-medium text-gray-700">Password</label>
-                <input type="password" className="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm" placeholder="••••••••" />
-            </div>
-            <button type="submit" className="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700">Sign In</button>
-        </form>
-    </div>
-);
-// --- End Mocks ---
+            <form className="space-y-6" onSubmit={handleLogin}>
+                <div>
+                    <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email Address</label>
+                    <input
+                        id="email"
+                        className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="you@yourcompany.com"
+                        required
+                    />
+                </div>
+                <div>
+                    <label htmlFor="password" className="text-sm font-medium text-gray-700">Password</label>
+                    <input
+                        id="password"
+                        className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        required
+                    />
+                </div>
+                <button
+                    type="submit"
+                    className="w-full py-2 px-4 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                    disabled={loading}
+                >
+                    {loading ? 'Signing In...' : 'Sign In'}
+                </button>
+                {error && <p className="text-sm text-red-600 text-center pt-2">{error}</p>}
+            </form>
+        </div>
+    );
+};
+// --- End Mocks & Components ---
 
 
 export default function PublicHomePage({ onGoToDashboard }) {
@@ -45,7 +103,6 @@ export default function PublicHomePage({ onGoToDashboard }) {
         return <div className="flex items-center justify-center h-screen"><p>Loading...</p></div>;
     }
     
-    // Updated pricing tiers to reflect realistic, demo-ready features
     const pricingTiers = [
         {
             name: 'Starter',
@@ -173,7 +230,7 @@ export default function PublicHomePage({ onGoToDashboard }) {
                 
                 {!session && (
                     <div id="login" className="py-16 bg-gray-100">
-                        <div className="max-w-md mx-auto px-4">
+                        <div className="max-w-md mx-auto px-4 flex justify-center">
                             <LoginPage />
                         </div>
                     </div>
