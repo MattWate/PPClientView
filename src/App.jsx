@@ -1,7 +1,10 @@
 import React from 'react';
-import { Routes, Route, Link } from 'react-router-dom'; // Removed HashRouter from here
+import { Routes, Route, Link, BrowserRouter as Router } from 'react-router-dom';
 
 // --- Mocks & Placeholders for Single-File Compilation ---
+// In a real multi-file app, these would be imported. They are defined here
+// to create a runnable, self-contained application for this environment.
+
 const supabase = {
   auth: {
     signOut: () => alert('Signing out...'),
@@ -9,6 +12,8 @@ const supabase = {
 };
 
 const useAuth = () => {
+    // To test the logged-in state, change the return value.
+    // e.g., return { session: { user: {} }, profile: { role: 'admin' }, loading: false };
     return { session: null, profile: null, loading: false };
 };
 
@@ -30,7 +35,8 @@ const CleanerAreaView = () => <div className="p-8"><h1 className="text-3xl font-
 const SupervisorAreaView = () => <div className="p-8"><h1 className="text-3xl font-bold">Supervisor Area View</h1></div>;
 const SiteReportPage = () => <div className="p-8"><h1 className="text-3xl font-bold">Site Report Page</h1></div>;
 
-// --- Helper Components ---
+
+// --- Helper Components from Original App.jsx ---
 const LoadingScreen = () => (
     <div className="flex items-center justify-center h-screen bg-gray-100">
         <p className="text-gray-600">Loading...</p>
@@ -76,10 +82,10 @@ export default function App() {
         return <LoadingScreen />;
     }
 
-    // The <HashRouter> has been removed from here. This component now only defines
-    // which set of routes should be active based on the auth state.
+    // This component now defines placeholder components locally to resolve the import errors.
+    // The Router is included here to ensure the preview is functional.
     return (
-        <>
+        <Router>
             {session && profile ? (
                 // Authenticated Routes
                 <Routes>
@@ -98,7 +104,7 @@ export default function App() {
                     <Route path="/public-scan/:areaId" element={<PublicScanPage />} />
                 </Routes>
             )}
-        </>
+        </Router>
     );
 }
 
