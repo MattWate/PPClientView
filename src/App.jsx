@@ -1,5 +1,6 @@
 import React from 'react';
-import { Routes, Route, Link, BrowserRouter as Router } from 'react-router-dom';
+// CORRECTED: Switched from BrowserRouter to HashRouter for compatibility.
+import { Routes, Route, Link, HashRouter as Router } from 'react-router-dom';
 
 // --- Mocks & Placeholders for Single-File Compilation ---
 // In a real multi-file app, these would be imported. They are defined here
