@@ -1,21 +1,44 @@
 import React from 'react';
-import { Routes, Route } from 'react-router-dom';
-import { useAuth } from './contexts/AuthContext.jsx';
-import { supabase } from './services/supabaseClient.js';
+import { Routes, Route, Link, BrowserRouter } from 'react-router-dom';
 
-// Import Pages & Layouts
-import PublicHomePage from './pages/PublicHomePage.jsx';
-import LoginPage from './pages/Login.jsx'; // Correct the import to use your existing Login.jsx
-import AdminLayout from './layouts/AdminLayout.jsx';
-import SupervisorLayout from './layouts/SupervisorLayout.jsx';
-import CleanerLayout from './layouts-cleaner/CleanerLayout.jsx'; // Assuming path
-import ScanHandlerPage from './pages/ScanHandlerPage.jsx';
-import PublicScanPage from './pages/PublicScanPage.jsx';
-import CleanerAreaView from './pages/CleanerAreaView.jsx';
-import SupervisorAreaView from './pages/SupervisorAreaView.jsx';
-import SiteReportPage from './pages/SiteReportPage.jsx';
+// --- Mocks & Placeholders for Single-File Compilation ---
+// In a real multi-file app, these would be imported. We are defining them
+// here to create a runnable, self-contained application for this environment.
 
-// ... (LoadingScreen and ProfileNotFound components remain the same) ...
+const supabase = {
+  auth: {
+    signOut: () => alert('Signing out...'),
+  }
+};
+
+// Mock Auth Context Hook
+const useAuth = () => {
+    // To test the logged-in state, change this return value.
+    // For example: return { session: { user: {} }, profile: { role: 'admin' }, loading: false };
+    return { session: null, profile: null, loading: false };
+};
+
+// Mock Page & Layout Components
+const PublicHomePage = () => (
+    <div className="p-8">
+        <h1 className="text-3xl font-bold">Public Home Page</h1>
+        <p className="mt-2">This is the public-facing landing page.</p>
+        <Link to="/login" className="text-blue-600 hover:underline mt-4 inline-block">Go to Login</Link>
+    </div>
+);
+const LoginPage = () => <div className="p-8"><h1 className="text-3xl font-bold">Login Page</h1></div>;
+const AdminLayout = () => <div className="p-8"><h1 className="text-3xl font-bold">Admin Dashboard Layout</h1></div>;
+const SupervisorLayout = () => <div className="p-8"><h1 className="text-3xl font-bold">Supervisor Dashboard Layout</h1></div>;
+const CleanerLayout = () => <div className="p-8"><h1 className="text-3xl font-bold">Cleaner Dashboard Layout</h1></div>;
+const ScanHandlerPage = () => <div className="p-8"><h1 className="text-3xl font-bold">Scan Handler Page</h1></div>;
+const PublicScanPage = () => <div className="p-8"><h1 className="text-3xl font-bold">Public Scan Page</h1></div>;
+const CleanerAreaView = () => <div className="p-8"><h1 className="text-3xl font-bold">Cleaner Area View</h1></div>;
+const SupervisorAreaView = () => <div className="p-8"><h1 className="text-3xl font-bold">Supervisor Area View</h1></div>;
+const SiteReportPage = () => <div className="p-8"><h1 className="text-3xl font-bold">Site Report Page</h1></div>;
+
+
+// --- Helper Components from Original App.jsx ---
+
 const LoadingScreen = () => (
     <div className="flex items-center justify-center h-screen bg-gray-100">
         <p className="text-gray-600">Loading...</p>
@@ -37,7 +60,6 @@ const ProfileNotFound = () => (
     </div>
 );
 
-
 const MainDashboard = () => {
     const { session, profile } = useAuth();
     if (!profile) return <ProfileNotFound />;
@@ -54,6 +76,8 @@ const MainDashboard = () => {
     }
 };
 
+// --- Main App Component ---
+
 export default function App() {
     const { session, profile, loading } = useAuth();
 
@@ -61,29 +85,30 @@ export default function App() {
         return <LoadingScreen />;
     }
 
-    // If the user is logged in, show their dashboard.
-    // Otherwise, show public pages.
-    if (session && profile) {
-        return (
-            <Routes>
-                <Route path="/" element={<MainDashboard />} />
-                <Route path="/scan/:areaId" element={<ScanHandlerPage />} />
-                <Route path="/cleaner-view/:areaId" element={<CleanerAreaView />} />
-                <Route path="/supervisor-view/:areaId" element={<SupervisorAreaView />} />
-                <Route path="/report/site" element={<SiteReportPage />} />
-                 {/* Add more authenticated routes here */}
-            </Routes>
-        );
-    }
-
-    // Routes for logged-out users
+    // This logic determines which set of routes to show based on login status.
+    // NOTE: Because a Router is needed to make Links and Routes work, we wrap the
+    // content in <BrowserRouter>. In your local setup, this is likely in main.jsx.
     return (
-        <Routes>
-            <Route path="/" element={<PublicHomePage />} />
-            <Route path="/login" element={<LoginPage />} /> {/* <-- ADD THIS NEW ROUTE */}
-            <Route path="/scan/:areaId" element={<ScanHandlerPage />} />
-            <Route path="/public-scan/:areaId" element={<PublicScanPage />} />
-        </Routes>
+        <BrowserRouter>
+            {session && profile ? (
+                // Authenticated Routes
+                <Routes>
+                    <Route path="/" element={<MainDashboard />} />
+                    <Route path="/scan/:areaId" element={<ScanHandlerPage />} />
+                    <Route path="/cleaner-view/:areaId" element={<CleanerAreaView />} />
+                    <Route path="/supervisor-view/:areaId" element={<SupervisorAreaView />} />
+                    <Route path="/report/site" element={<SiteReportPage />} />
+                </Routes>
+            ) : (
+                // Public (Logged-out) Routes
+                <Routes>
+                    <Route path="/" element={<PublicHomePage />} />
+                    <Route path="/login" element={<LoginPage />} />
+                    <Route path="/scan/:areaId" element={<ScanHandlerPage />} />
+                    <Route path="/public-scan/:areaId" element={<PublicScanPage />} />
+                </Routes>
+            )}
+        </BrowserRouter>
     );
 }
 
