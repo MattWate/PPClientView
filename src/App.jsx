@@ -19,8 +19,6 @@ const supabase = {
 
 
 // --- Real Components Integrated ---
-// The actual, styled PublicHomePage and LoginPage are now included here.
-
 const LoginPage = () => {
     const [loading, setLoading] = useState(false);
     const [email, setEmail] = useState('');
@@ -130,11 +128,7 @@ const PublicHomePage = () => {
                         </div>
                     </div>
                 </div>
-                {!session && (
-                    <div id="login" className="py-16 bg-gray-100">
-                        <div className="max-w-md mx-auto px-4"><LoginPage /></div>
-                    </div>
-                )}
+                {/* The embedded login page is removed as we now have a dedicated /login route */}
             </main>
         </div>
     );
@@ -174,6 +168,11 @@ export default function App() {
 
     return (
         <>
+            {/* SCRIPT TAG TO LOAD TAILWIND CSS FOR PREVIEW */}
+            <script src="https://cdn.tailwindcss.com"></script>
+            {/* Font Awesome for icons */}
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
+
             {session && profile ? (
                 <Routes>
                     <Route path="/" element={<MainDashboard />} />
