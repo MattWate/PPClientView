@@ -1,14 +1,8 @@
 // src/pages/PublicHomePage.jsx
 import React from 'react';
 import { Link } from 'react-router-dom';
-
-// --- PRODUCTION IMPORTS ---
-// In your real project, you would use these lines. They are commented out here
-// to prevent errors in this isolated preview environment.
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { supabase } from '../services/supabaseClient.js';
-
-
 
 export default function PublicHomePage() {
     const { session, loading } = useAuth();
@@ -81,13 +75,11 @@ export default function PublicHomePage() {
                     </div>
                     {session ? (
                         <div>
-                            {/* We use a simple anchor tag here because the mock Link doesn't exist */}
-                            <a href="#/app" className="bg-indigo-600 text-white px-4 py-2 rounded-md mr-2 hover:bg-indigo-700">Go to Dashboard</a>
+                            <Link to="/app" className="bg-indigo-600 text-white px-4 py-2 rounded-md mr-2 hover:bg-indigo-700">Go to Dashboard</Link>
                             <button onClick={() => supabase.auth.signOut()} className="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">Sign Out</button>
                         </div>
                     ) : (
-                         // In a real app this would be a <Link> component
-                        <a href="#/login" className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Client Login</a>
+                        <Link to="/login" className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Client Login</Link>
                     )}
                 </div>
             </header>
