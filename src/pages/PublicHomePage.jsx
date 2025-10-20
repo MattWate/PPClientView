@@ -2,23 +2,9 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 // The lines below are commented out to resolve build errors in this environment.
-// import { useAuth } from '../contexts/AuthContext.jsx';
-// import { supabase } from '../services/supabaseClient.js';
+import { useAuth } from '../contexts/AuthContext.jsx';
+import { supabase } from '../services/supabaseClient.js';
 
-// --- Mocks for Single-File Compilation ---
-// To make this file runnable on its own, we create mock versions of the
-// external dependencies that were causing the errors.
-const useAuth = () => ({
-    session: null, // You can change this to test the logged-in view
-    loading: false,
-});
-
-const supabase = {
-    auth: {
-        signOut: () => alert('Signing out...'),
-    }
-};
-// --- End Mocks ---
 
 
 export default function PublicHomePage({ onGoToDashboard }) {
