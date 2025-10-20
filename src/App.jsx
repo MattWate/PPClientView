@@ -1,6 +1,5 @@
 // src/App.jsx
 import React from 'react';
-// Remove 'HashRouter as Router' - it's already in main.jsx
 import { Routes, Route, Navigate } from 'react-router-dom';
 
 // Auth & client
@@ -85,13 +84,15 @@ export default function App() {
 
   if (loading) return <LoadingScreen />;
 
-  // --- NO <Router> here! ---
-  // It's already in main.jsx
   return (
     <Routes>
+      {/* --- THIS IS THE FIX --- */}
+      {/* Send users at the root directly to the login page */}
+      <Route path="/" element={<Navigate to="/login" replace />} />
+      
       {/* Public routes */}
-      <Route path="/" element={<PublicHomePage />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/public-home" element={<PublicHomePage />} /> {/* Kept this in case you use it */}
       <Route path="/public-scan/:areaId" element={<PublicScanPage />} />
 
       {/* QR code entry point */}
@@ -123,12 +124,11 @@ export default function App() {
         element={<RequireAuth><SiteReportPage /></RequireAuth>} 
       />
 
-      {/* Fallback — if signed in, send to /app; otherwise home */}
+      {/* Fallback — if signed in, send to /app; otherwise login */}
       <Route
         path="*"
-        element={session ? <Navigate to="/app" replace /> : <Navigate to="/" replace />}
+        element={session ? <Navigate to="/app" replace /> : <Navigate to="/login" replace />}
       />
     </Routes>
   );
-  // --- NO </Router> here! ---
 }
