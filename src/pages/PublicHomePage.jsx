@@ -1,38 +1,28 @@
 // src/pages/PublicHomePage.jsx
 import React from 'react';
-import { Link } from 'react-router-dom'; // In a real app, this is imported.
-import { useAuth } from '../contexts/AuthContext.jsx';
-import { supabase } from '../services/supabaseClient.js';
+import { Link } from 'react-router-dom';
+// The lines below are commented out to resolve build errors in this environment.
+// import { useAuth } from '../contexts/AuthContext.jsx';
+// import { supabase } from '../services/supabaseClient.js';
 
 // --- Mocks for Single-File Compilation ---
-// In a real multi-file app, these would be imported from separate files.
-// We are mocking them here to make this component runnable on its own.
-const MockAuthContext = {
-    useAuth: () => ({
-        session: null, // or { user: { email: 'test@example.com' } } to test logged-in state
-        loading: false,
-    }),
-};
+// To make this file runnable on its own, we create mock versions of the
+// external dependencies that were causing the errors.
+const useAuth = () => ({
+    session: null, // You can change this to test the logged-in view
+    loading: false,
+});
 
-const MockSupabaseClient = {
+const supabase = {
     auth: {
-        signOut: () => {
-            alert('Signing out...');
-        }
+        signOut: () => alert('Signing out...'),
     }
 };
-
-// In this environment, we replace the react-router-dom Link with a simple anchor tag.
-const MockLink = ({ to, children, ...props }) => <a href={to} {...props}>{children}</a>;
-
-// Use mocks in this component
-const useAuthHook = MockAuthContext.useAuth;
-const supabaseClient = MockSupabaseClient;
-const LinkComponent = MockLink;
 // --- End Mocks ---
 
+
 export default function PublicHomePage({ onGoToDashboard }) {
-    const { session, loading } = useAuthHook();
+    const { session, loading } = useAuth();
 
     if (loading) {
         return <div className="flex items-center justify-center h-screen"><p>Loading...</p></div>;
@@ -105,11 +95,10 @@ export default function PublicHomePage({ onGoToDashboard }) {
                     {session ? (
                         <div>
                             <button onClick={onGoToDashboard} className="bg-indigo-600 text-white px-4 py-2 rounded-md mr-2 hover:bg-indigo-700">Go to Dashboard</button>
-                            <button onClick={() => supabaseClient.auth.signOut()} className="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">Sign Out</button>
+                            <button onClick={() => supabase.auth.signOut()} className="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">Sign Out</button>
                         </div>
                     ) : (
-                        // This now correctly links to the dedicated login page
-                        <LinkComponent to="/login" className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Client Login</LinkComponent>
+                        <Link to="/login" className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Client Login</Link>
                     )}
                 </div>
             </header>
@@ -163,8 +152,6 @@ export default function PublicHomePage({ onGoToDashboard }) {
                         </div>
                     </div>
                 </div>
-                
-                {/* The broken login form has been removed from here */}
             </main>
         </div>
     );
