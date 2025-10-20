@@ -1,5 +1,5 @@
 // src/services/supabaseClient.js
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+import { createClient } from '@supabase/supabase-js';
 
 // --- Configuration ---
 const SUPABASE_URL = 'https://clsirugxuvdyxdnlwqqk.supabase.co';
@@ -7,3 +7,4 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 // Initialize and export the Supabase client.
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
