@@ -1,12 +1,12 @@
 // src/App.jsx
 import React from 'react';
-import { HashRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
-// Real project imports (adjust paths if your repo structure is different)
+// Auth & client (adjust import paths if your project uses different file locations)
 import { useAuth } from './contexts/AuthContext.jsx';
-import { supabase } from './supabaseClient.js';
+import { supabase } from './services/supabaseClient.js';
 
-// Pages (based on your pages/ directory)
+// Pages (matching your pages/ folder). Adjust if your filenames are different.
 import PublicHomePage from './pages/PublicHomePage.jsx';
 import PublicScanPage from './pages/PublicScanPage.jsx';
 import Login from './pages/Login.jsx';
@@ -22,7 +22,7 @@ import Sites from './pages/Sites.jsx';
 import Staff from './pages/Staff.jsx';
 import Tasks from './pages/Tasks.jsx';
 
-// Small UI helpers kept from your original file
+// Small UI helpers
 const LoadingScreen = () => (
   <div className="flex items-center justify-center h-screen bg-gray-100">
     <p className="text-gray-600">Loading...</p>
@@ -44,7 +44,7 @@ const ProfileNotFound = ({ onSignOut }) => (
   </div>
 );
 
-// Route guard for authenticated routes
+// Protect routes: if not authenticated, go to /login
 function RequireAuth({ children }) {
   const { session, loading } = useAuth();
 
@@ -53,7 +53,7 @@ function RequireAuth({ children }) {
   return children;
 }
 
-// Role-based main dashboard selector
+// Pick main dashboard component by role
 function MainDashboard() {
   const { profile } = useAuth();
 
@@ -61,7 +61,7 @@ function MainDashboard() {
     return <ProfileNotFound onSignOut={() => supabase.auth.signOut()} />;
   }
 
-  switch (profile.role) {
+  switch (String(profile.role).toLowerCase()) {
     case 'admin':
     case 'administrator':
       return <Dashboard />;
@@ -70,7 +70,6 @@ function MainDashboard() {
       return <SupervisorDashboard />;
 
     case 'cleaner':
-      // Cleaner users probably need the area view or tasks
       return <CleanerAreaView />;
 
     default:
@@ -85,7 +84,6 @@ export default function App() {
 
   return (
     <Router>
-      {/* Note: keep tailwind build loaded in your index.html/main template — avoid injecting CDN here */}
       <Routes>
         {/* Public routes */}
         <Route path="/" element={<PublicHomePage />} />
@@ -93,15 +91,16 @@ export default function App() {
         <Route path="/public-scan/:areaId" element={<PublicScanPage />} />
         <Route path="/scan/:areaId" element={<ScanHandlerPage />} />
 
-        {/* Authenticated / protected routes */}
+        {/* Authenticated app routes grouped under /app */}
         <Route
           path="/app/*"
           element={
             <RequireAuth>
               <Routes>
+                {/* /#/app -> main dashboard */}
                 <Route index element={<MainDashboard />} />
 
-                {/* Generic admin pages */}
+                {/* Admin / global pages */}
                 <Route path="dashboard" element={<Dashboard />} />
                 <Route path="sites" element={<Sites />} />
                 <Route path="staff" element={<Staff />} />
@@ -109,7 +108,7 @@ export default function App() {
                 <Route path="assignments" element={<Assignments />} />
                 <Route path="cleaner/tasks" element={<CleanerTasksPage />} />
 
-                {/* Role / area specific views */}
+                {/* Area & role specific */}
                 <Route path="scan/:areaId" element={<ScanHandlerPage />} />
                 <Route path="cleaner-view/:areaId" element={<CleanerAreaView />} />
                 <Route path="supervisor-view/:areaId" element={<SupervisorAreaView />} />
@@ -117,14 +116,14 @@ export default function App() {
                 {/* Reports */}
                 <Route path="report/site" element={<SiteReportPage />} />
 
-                {/* Fallback to dashboard for unknown /app routes */}
+                {/* Unknown under /app -> go to dashboard */}
                 <Route path="*" element={<Navigate to="/app" replace />} />
               </Routes>
             </RequireAuth>
           }
         />
 
-        {/* Catch-all: if authenticated send to app dashboard, otherwise home */}
+        {/* Fallback — if signed in, send to /app; otherwise home */}
         <Route
           path="*"
           element={session ? <Navigate to="/app" replace /> : <Navigate to="/" replace />}
