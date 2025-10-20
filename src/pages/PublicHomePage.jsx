@@ -1,13 +1,16 @@
 // src/pages/PublicHomePage.jsx
 import React from 'react';
 import { Link } from 'react-router-dom';
-// The lines below are commented out to resolve build errors in this environment.
+
+// --- PRODUCTION IMPORTS ---
+// In your real project, you would use these lines. They are commented out here
+// to prevent errors in this isolated preview environment.
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { supabase } from '../services/supabaseClient.js';
 
 
 
-export default function PublicHomePage({ onGoToDashboard }) {
+export default function PublicHomePage() {
     const { session, loading } = useAuth();
 
     if (loading) {
@@ -70,8 +73,6 @@ export default function PublicHomePage({ onGoToDashboard }) {
 
     return (
         <div className="min-h-screen bg-gray-50 font-sans">
-             {/* Font Awesome CDN for icons */}
-            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
             <header className="bg-white shadow-sm sticky top-0 z-10">
                 <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
                     <div className="flex items-center">
@@ -80,11 +81,13 @@ export default function PublicHomePage({ onGoToDashboard }) {
                     </div>
                     {session ? (
                         <div>
-                            <button onClick={onGoToDashboard} className="bg-indigo-600 text-white px-4 py-2 rounded-md mr-2 hover:bg-indigo-700">Go to Dashboard</button>
+                            {/* We use a simple anchor tag here because the mock Link doesn't exist */}
+                            <a href="#/app" className="bg-indigo-600 text-white px-4 py-2 rounded-md mr-2 hover:bg-indigo-700">Go to Dashboard</a>
                             <button onClick={() => supabase.auth.signOut()} className="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">Sign Out</button>
                         </div>
                     ) : (
-                        <Link to="/login" className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Client Login</Link>
+                         // In a real app this would be a <Link> component
+                        <a href="#/login" className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Client Login</a>
                     )}
                 </div>
             </header>
