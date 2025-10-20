@@ -59,7 +59,7 @@ export default function CleanerTasksPage({ profile }) {
               <div>
                 <p className="font-semibold text-lg">{task.title}</p>
                 <p className="text-sm text-gray-600">
-                  {task.areas.sites.name} > {task.areas.zones.name} > {task.areas.name}
+                  {task.areas.sites.name} &gt; {task.areas.zones.name} &gt; {task.areas.name}
                 </p>
               </div>
               <button onClick={() => handleCompleteTask(task.id)} className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">
