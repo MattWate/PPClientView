@@ -63,13 +63,29 @@ function AppLayout() {
     if (session?.user) {
       const fetchProfile = async () => {
         try {
+          // --- MODIFIED DATABASE QUERY ---
+          // We are no longer using .single() to get more detailed results.
           const { data, error } = await supabase
             .from('profiles')
             .select('*')
-            .eq('id', session.user.id)
-            .single();
-          if (error) throw error;
-          setProfile(data);
+            .eq('id', session.user.id);
+
+          if (error) {
+            // If Supabase itself throws an error, we catch it here.
+            throw error;
+          }
+
+          if (data && data.length === 1) {
+            // SUCCESS: We found exactly one profile.
+            setProfile(data[0]);
+          } else if (data && data.length > 1) {
+            // ERROR: This indicates a data integrity issue.
+            throw new Error("Multiple profiles found for the same user ID.");
+          } else {
+            // ERROR: The user is authenticated, but no profile row exists.
+            throw new Error("No profile found for this user.");
+          }
+
         } catch (e) {
           console.error("Failed to fetch profile in AppLayout:", e);
           setProfile(null); // Set profile to null on error
@@ -152,3 +168,4 @@ export default function App() {
     </Routes>
   );
 }
+
