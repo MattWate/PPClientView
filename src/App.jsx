@@ -1,5 +1,5 @@
 // src/App.jsx
-import React, { useState, useEffect } from 'react'; // <-- Added useState and useEffect
+import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 
 // Auth & client
@@ -51,8 +51,6 @@ function RequireAuth({ children }) {
   return children;
 }
 
-// --- THIS COMPONENT IS NOW FIXED ---
-// It now fetches the profile itself, ensuring the correct layout is chosen.
 function AppLayout() {
   const { session } = useAuth();
   const [profile, setProfile] = useState(null);
@@ -62,12 +60,9 @@ function AppLayout() {
     if (session?.user) {
       const fetchProfile = async () => {
         try {
-          // --- NEW FIX: Force the client to refresh its auth token ---
-          // This ensures the database request uses the latest JWT and prevents a hang.
           console.log("Forcing Supabase auth refresh...");
           await supabase.auth.refreshSession();
           console.log("Auth refresh complete. Fetching profile...");
-          // --- END OF FIX ---
 
           const { data, error } = await supabase
             .from('profiles')
@@ -107,8 +102,7 @@ function AppLayout() {
     return <ProfileNotFound onSignOut={() => supabase.auth.signOut()} />;
   }
 
-  // ... rest of the component
-  }
+  // --- THE EXTRA BRACE WAS REMOVED FROM HERE ---
 
   // Once the profile is loaded, render the correct layout.
   switch (String(profile.role).toLowerCase()) {
@@ -131,7 +125,6 @@ function AppLayout() {
 export default function App() {
   const { session, loading } = useAuth();
 
-  // This initial loading screen is for the session, which is very fast.
   if (loading) return <LoadingScreen />;
 
   return (
@@ -168,5 +161,4 @@ export default function App() {
     </Routes>
   );
 }
-
 
