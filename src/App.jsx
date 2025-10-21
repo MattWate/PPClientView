@@ -54,60 +54,60 @@ function RequireAuth({ children }) {
 // --- THIS COMPONENT IS NOW FIXED ---
 // It now fetches the profile itself, ensuring the correct layout is chosen.
 function AppLayout() {
-  const { session } = useAuth(); // We only get the session from the context now.
+  const { session } = useAuth();
   const [profile, setProfile] = useState(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
 
   useEffect(() => {
-    // This effect runs when the session is available.
     if (session?.user) {
       const fetchProfile = async () => {
         try {
-          // --- MODIFIED DATABASE QUERY ---
-          // We are no longer using .single() to get more detailed results.
+          // --- NEW FIX: Force the client to refresh its auth token ---
+          // This ensures the database request uses the latest JWT and prevents a hang.
+          console.log("Forcing Supabase auth refresh...");
+          await supabase.auth.refreshSession();
+          console.log("Auth refresh complete. Fetching profile...");
+          // --- END OF FIX ---
+
           const { data, error } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', session.user.id);
 
           if (error) {
-            // If Supabase itself throws an error, we catch it here.
             throw error;
           }
 
           if (data && data.length === 1) {
-            // SUCCESS: We found exactly one profile.
             setProfile(data[0]);
           } else if (data && data.length > 1) {
-            // ERROR: This indicates a data integrity issue.
             throw new Error("Multiple profiles found for the same user ID.");
           } else {
-            // ERROR: The user is authenticated, but no profile row exists.
             throw new Error("No profile found for this user.");
           }
 
         } catch (e) {
           console.error("Failed to fetch profile in AppLayout:", e);
-          setProfile(null); // Set profile to null on error
+          setProfile(null);
         } finally {
-          setLoadingProfile(false); // Stop loading once done
+          setLoadingProfile(false);
         }
       };
       fetchProfile();
     } else {
-      // If there's no session, we're not loading a profile.
       setLoadingProfile(false);
     }
   }, [session]);
 
-  // Show a loading screen while the profile is being fetched.
   if (loadingProfile) {
     return <LoadingScreen />;
   }
 
-  // If fetching is done but we have no profile, show the error.
   if (!profile) {
     return <ProfileNotFound onSignOut={() => supabase.auth.signOut()} />;
+  }
+
+  // ... rest of the component
   }
 
   // Once the profile is loaded, render the correct layout.
@@ -168,4 +168,5 @@ export default function App() {
     </Routes>
   );
 }
+
 
