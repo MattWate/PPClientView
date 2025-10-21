@@ -1,5 +1,5 @@
 // src/App.jsx
-import React from 'react';
+import React, { useState, useEffect } from 'react'; // <-- Added useState and useEffect
 import { Routes, Route, Navigate } from 'react-router-dom';
 
 // Auth & client
@@ -51,17 +51,50 @@ function RequireAuth({ children }) {
   return children;
 }
 
-// This component selects the correct *layout* for the user.
+// --- THIS COMPONENT IS NOW FIXED ---
+// It now fetches the profile itself, ensuring the correct layout is chosen.
 function AppLayout() {
-  const { session, profile, loading } = useAuth();
+  const { session } = useAuth(); // We only get the session from the context now.
+  const [profile, setProfile] = useState(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
 
-  if (loading) return <LoadingScreen />;
+  useEffect(() => {
+    // This effect runs when the session is available.
+    if (session?.user) {
+      const fetchProfile = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+          if (error) throw error;
+          setProfile(data);
+        } catch (e) {
+          console.error("Failed to fetch profile in AppLayout:", e);
+          setProfile(null); // Set profile to null on error
+        } finally {
+          setLoadingProfile(false); // Stop loading once done
+        }
+      };
+      fetchProfile();
+    } else {
+      // If there's no session, we're not loading a profile.
+      setLoadingProfile(false);
+    }
+  }, [session]);
 
+  // Show a loading screen while the profile is being fetched.
+  if (loadingProfile) {
+    return <LoadingScreen />;
+  }
+
+  // If fetching is done but we have no profile, show the error.
   if (!profile) {
     return <ProfileNotFound onSignOut={() => supabase.auth.signOut()} />;
   }
 
-  // Pass session and profile to the layouts
+  // Once the profile is loaded, render the correct layout.
   switch (String(profile.role).toLowerCase()) {
     case 'admin':
     case 'administrator':
@@ -82,23 +115,16 @@ function AppLayout() {
 export default function App() {
   const { session, loading } = useAuth();
 
+  // This initial loading screen is for the session, which is very fast.
   if (loading) return <LoadingScreen />;
 
   return (
     <Routes>
-      {/* --- THIS IS THE FIX --- */}
-      {/* Send users at the root directly to the login page */}
       <Route path="/" element={<Navigate to="/login" replace />} />
-      
-      {/* Public routes */}
       <Route path="/login" element={<Login />} />
-      <Route path="/public-home" element={<PublicHomePage />} /> {/* Kept this in case you use it */}
+      <Route path="/public-home" element={<PublicHomePage />} />
       <Route path="/public-scan/:areaId" element={<PublicScanPage />} />
-
-      {/* QR code entry point */}
       <Route path="/scan/:areaId" element={<ScanHandlerPage />} />
-
-      {/* --- SIMPLIFIED APP ROUTE --- */}
       <Route
         path="/app/*"
         element={
@@ -107,8 +133,6 @@ export default function App() {
           </RequireAuth>
         }
       />
-
-      {/* --- Specific role-based routes for scanning --- */}
       <Route 
         path="/cleaner-view/:areaId" 
         element={<RequireAuth><CleanerAreaView /></RequireAuth>} 
@@ -117,14 +141,10 @@ export default function App() {
         path="/supervisor-view/:areaId" 
         element={<RequireAuth><SupervisorAreaView /></RequireAuth>} 
       />
-      
-      {/* --- Report route --- */}
       <Route 
         path="/report/site" 
         element={<RequireAuth><SiteReportPage /></RequireAuth>} 
       />
-
-      {/* Fallback — if signed in, send to /app; otherwise login */}
       <Route
         path="*"
         element={session ? <Navigate to="/app" replace /> : <Navigate to="/login" replace />}
