@@ -22,14 +22,23 @@ export default function Login() {
   }, [session, navigate]); // It re-runs only when session or navigate changes.
   // --- END OF FIX ---
 
-  const handleLogin = async (e) => {
+const handleLogin = async (e) => {
     e.preventDefault();
+    console.log('Login: Attempting to sign in...'); // <-- ADDED
     try {
       setLoading(true);
       setError(null);
+      
+      console.log('Login: Calling supabase.auth.signInWithPassword...'); // <-- ADDED
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-      // The onAuthStateChange listener in AuthContext will handle the redirect via the useEffect above.
+      
+      if (error) {
+        console.error('Login: signInWithPassword ERROR:', error.message); // <-- ADDED
+        throw error;
+      }
+      
+      console.log('Login: signInWithPassword SUCCESS.'); // <-- ADDED
+      // The onAuthStateChange listener in AuthContext will handle the redirect.
     } catch (error) {
       setError(error.message);
     } finally {
@@ -100,3 +109,4 @@ export default function Login() {
     </div>
   );
 }
+
