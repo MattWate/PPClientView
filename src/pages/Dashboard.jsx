@@ -256,7 +256,8 @@ export default function DashboardPage({ profile, setCurrentPage }) {
                   <Tooltip formatter={(value) => `${value}%`} />
                   <Bar dataKey="Compliance">
                     {complianceChartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.Compliance < slaThreshold ? '#f97316' : '#8884d8'} />))}
-                  </A>
+                  </Bar> 
+                  {/* --- THIS IS THE FIX: Changed </A> to </Bar> --- */}
                 </BarChart>
               </ResponsiveContainer>
             </div>
