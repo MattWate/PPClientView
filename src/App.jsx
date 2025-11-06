@@ -20,6 +20,10 @@ import CleanerAreaView from './pages/CleanerAreaView.jsx';
 import SupervisorAreaView from './pages/SupervisorAreaView.jsx';
 import SiteReportPage from './pages/SiteReportPage.jsx';
 
+// ---
+// FIX 1: All components moved to the top level, outside the 'App' function.
+// ---
+
 // Small UI helpers
 const LoadingScreen = () => (
   <div className="flex items-center justify-center h-screen bg-gray-100">
@@ -102,8 +106,6 @@ function AppLayout() {
     return <ProfileNotFound onSignOut={() => supabase.auth.signOut()} />;
   }
 
-  // --- THE EXTRA BRACE WAS REMOVED FROM HERE ---
-
   // Once the profile is loaded, render the correct layout.
   switch (String(profile.role).toLowerCase()) {
     case 'admin':
@@ -128,17 +130,37 @@ export default function App() {
   if (loading) return <LoadingScreen />;
 
   return (
-   <Routes>
-  <Route path="/" element={<PublicHomePage />} /> {/* <-- Show public page at the root */}
-  <Route path="/login" element={<Login />} />
-  {/* You can remove the /public-home route now, or keep it as an alias */}
-  {/* <Route path="/public-home" element={<PublicHomePage />} /> */}
-  
-  <Route path="/public-scan/:areaId" element={<PublicScanPage />} />
-  <Route path="/scan/:areaId" element={<ScanHandlerPage />} />
-  {/* ... (rest of the routes are fine) ... */}
-</Routes>
+    <Routes>
+      {/* FIX 2: Set PublicHomePage as the default route */}
+      <Route path="/" element={<PublicHomePage />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/public-home" element={<PublicHomePage />} />
+      <Route path="/public-scan/:areaId" element={<PublicScanPage />} />
+      <Route path="/scan/:areaId" element={<ScanHandlerPage />} />
+      <Route
+        path="/app/*"
+        element={
+          <RequireAuth>
+            <AppLayout />
+          </RequireAuth>
+        }
+      />
+      <Route 
+        path="/cleaner-view/:areaId" 
+        element={<RequireAuth><CleanerAreaView /></RequireAuth>} 
+      />
+      <Route 
+        path="/supervisor-view/:areaId" 
+        element={<RequireAuth><SupervisorAreaView /></RequireAuth>} 
+      />
+      <Route 
+        path="/report/site" 
+        element={<RequireAuth><SiteReportPage /></RequireAuth>} 
+      />
+      <Route
+        path="*"
+        element={session ? <Navigate to="/app" replace /> : <Navigate to="/login" replace />}
+      />
+    </Routes>
   );
 }
-
-
