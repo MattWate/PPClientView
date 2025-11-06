@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+// import { useNavigate } from 'react-router-dom'; // --- 1. REMOVE THIS ---
 import { supabase } from '../services/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -8,8 +8,9 @@ import {
 } from 'recharts';
 
 // --- Reusable, Clickable KPI Card Component ---
-const KpiCard = ({ title, value, icon, color, linkTo }) => {
-  const navigate = useNavigate();
+// --- 2. MODIFY KpiCard to accept 'onNavigate' prop ---
+const KpiCard = ({ title, value, icon, color, linkTo, onNavigate }) => {
+  // const navigate = useNavigate(); // --- 3. REMOVE THIS ---
   const colors = {
     purple: 'bg-purple-100 text-purple-600',
     green: 'bg-green-100 text-green-600',
@@ -18,8 +19,9 @@ const KpiCard = ({ title, value, icon, color, linkTo }) => {
   };
 
   const handleClick = () => {
-    if (linkTo) {
-      navigate(linkTo);
+    // --- 4. USE the 'onNavigate' prop ---
+    if (linkTo && onNavigate) {
+      onNavigate(linkTo);
     }
   };
 
@@ -39,7 +41,7 @@ const KpiCard = ({ title, value, icon, color, linkTo }) => {
 
 // --- Modal for Generating Reports ---
 const ReportGeneratorModal = ({ isOpen, onClose, sites }) => {
-  const navigate = useNavigate();
+  const navigate = useNavigate(); // This is OK, it navigates to a new route '/report/site'
   const [selectedSiteId, setSelectedSiteId] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -53,7 +55,8 @@ const ReportGeneratorModal = ({ isOpen, onClose, sites }) => {
     navigate(reportUrl);
     onClose();
   };
-
+  
+  // ... (rest of ReportGeneratorModal is unchanged) ...
   if (!isOpen) return null;
 
   return (
@@ -106,8 +109,10 @@ const ReportGeneratorModal = ({ isOpen, onClose, sites }) => {
   );
 };
 
-export default function DashboardPage() {
-  const { profile } = useAuth();
+
+// --- 5. ACCEPT 'setCurrentPage' as a prop ---
+export default function DashboardPage({ profile, setCurrentPage }) {
+  // const { profile } = useAuth(); // You can use the prop passed from AdminLayout
   const [stats, setStats] = useState({ totalSites: 0, activeStaff: 0, tasksCompletedToday: 0, openIssues: 0 });
   const [completionChartData, setCompletionChartData] = useState([]);
   const [complianceChartData, setComplianceChartData] = useState([]);
@@ -194,6 +199,7 @@ export default function DashboardPage() {
     <>
       <div className="space-y-8">
         <div className="bg-white p-4 rounded-lg shadow-md flex flex-col sm:flex-row gap-4 items-center">
+          {/* ... (filter UI is unchanged) ... */}
           <div className="flex-1 w-full sm:w-auto">
             <label className="text-sm font-medium text-gray-700">Filter by Site</label>
             <select value={selectedSiteId} onChange={e => setSelectedSiteId(e.target.value)} className="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm">
@@ -215,13 +221,15 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <KpiCard title="Total Sites" value={stats.totalSites} icon="fa-sitemap" color="purple" linkTo="/app/sites" />
-          <KpiCard title="Active Staff" value={stats.activeStaff} icon="fa-users" color="blue" linkTo="/app/staff" />
-          <KpiCard title="Tasks Completed Today" value={stats.tasksCompletedToday} icon="fa-check-circle" color="green" linkTo="/app/tasks" />
-          <KpiCard title="Open Issues" value={stats.openIssues} icon="fa-exclamation-triangle" color="red" linkTo="/app/issues" />
+          {/* --- 6. UPDATE the KpiCard calls --- */}
+          <KpiCard title="Total Sites" value={stats.totalSites} icon="fa-sitemap" color="purple" linkTo="sites" onNavigate={setCurrentPage} />
+          <KpiCard title="Active Staff" value={stats.activeStaff} icon="fa-users" color="blue" linkTo="staff" onNavigate={setCurrentPage} />
+          <KpiCard title="Tasks Completed Today" value={stats.tasksCompletedToday} icon="fa-check-circle" color="green" linkTo="tasks" onNavigate={setCurrentPage} />
+          <KpiCard title="Open Issues" value={stats.openIssues} icon="fa-exclamation-triangle" color="red" linkTo="issues" onNavigate={setCurrentPage} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+           {/* ... (charts are unchanged) ... */}
           <div className="bg-white p-6 rounded-lg shadow-md">
             <h3 className="text-xl font-semibold text-gray-800 mb-4">Task Completion Trend (Last 7 Days)</h3>
             <div className="h-64">
@@ -248,7 +256,7 @@ export default function DashboardPage() {
                   <Tooltip formatter={(value) => `${value}%`} />
                   <Bar dataKey="Compliance">
                     {complianceChartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.Compliance < slaThreshold ? '#f97316' : '#8884d8'} />))}
-                  </Bar>
+                  </A>
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -256,6 +264,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="bg-white p-6 rounded-lg shadow-md">
+           {/* ... (reports section is unchanged) ... */}
           <h3 className="text-xl font-semibold text-gray-800 mb-4">Reports</h3>
           <div className="flex items-center space-x-4">
             <button onClick={() => setIsReportModalOpen(true)} className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700">Generate Site Report</button>
@@ -268,4 +277,3 @@ export default function DashboardPage() {
     </>
   );
 }
-
