@@ -64,9 +64,9 @@ function AppLayout() {
     if (session?.user) {
       const fetchProfile = async () => {
         try {
-          console.log("Forcing Supabase auth refresh...");
-          await supabase.auth.refreshSession();
-          console.log("Auth refresh complete. Fetching profile...");
+          // console.log("Forcing Supabase auth refresh...");
+          // await supabase.auth.refreshSession(); // <-- THIS WAS THE INFINITE LOOP. REMOVED.
+          // console.log("Auth refresh complete. Fetching profile...");
 
           const { data, error } = await supabase
             .from('profiles')
@@ -164,3 +164,4 @@ export default function App() {
     </Routes>
   );
 }
+
