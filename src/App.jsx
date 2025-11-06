@@ -128,37 +128,17 @@ export default function App() {
   if (loading) return <LoadingScreen />;
 
   return (
-    <Routes>
-      <Route path="/" element={<Navigate to="/login" replace />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/public-home" element={<PublicHomePage />} />
-      <Route path="/public-scan/:areaId" element={<PublicScanPage />} />
-      <Route path="/scan/:areaId" element={<ScanHandlerPage />} />
-      <Route
-        path="/app/*"
-        element={
-          <RequireAuth>
-            <AppLayout />
-          </RequireAuth>
-        }
-      />
-      <Route 
-        path="/cleaner-view/:areaId" 
-        element={<RequireAuth><CleanerAreaView /></RequireAuth>} 
-      />
-      <Route 
-        path="/supervisor-view/:areaId" 
-        element={<RequireAuth><SupervisorAreaView /></RequireAuth>} 
-      />
-      <Route 
-        path="/report/site" 
-        element={<RequireAuth><SiteReportPage /></RequireAuth>} 
-      />
-      <Route
-        path="*"
-        element={session ? <Navigate to="/app" replace /> : <Navigate to="/login" replace />}
-      />
-    </Routes>
+   <Routes>
+  <Route path="/" element={<PublicHomePage />} /> {/* <-- Show public page at the root */}
+  <Route path="/login" element={<Login />} />
+  {/* You can remove the /public-home route now, or keep it as an alias */}
+  {/* <Route path="/public-home" element={<PublicHomePage />} /> */}
+  
+  <Route path="/public-scan/:areaId" element={<PublicScanPage />} />
+  <Route path="/scan/:areaId" element={<ScanHandlerPage />} />
+  {/* ... (rest of the routes are fine) ... */}
+</Routes>
   );
 }
+
 
