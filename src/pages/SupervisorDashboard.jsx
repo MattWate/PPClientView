@@ -208,7 +208,13 @@ export default function SupervisorDashboard() {
       setLoading(true); 
       setError(null);
 
-      const { data: assignedZones, error: zonesError } = await supabase.from('zone_assignments').select('zones!inner(*, sites(*))').eq('user_id', profile.id);
+      // --- FIX: Changed 'zones!inner' to 'zones!left' ---
+      // This ensures that zones are loaded even if their parent 'site' is missing or null.
+      // An 'inner' join would fail and return 0 rows, causing the blank dashboard.
+      const { data: assignedZones, error: zonesError } = await supabase
+        .from('zone_assignments')
+        .select('zones!left(*, sites!left(*))') // <-- THE FIX IS HERE
+        .eq('user_id', profile.id);
       if (zonesError) throw zonesError;
 
       const supervisorZones = (assignedZones || []).map(z => z.zones).filter(Boolean);
