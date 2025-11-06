@@ -1,5 +1,5 @@
 // src/App.jsx
-import React, { useState, useEffect } from 'react';
+import React from 'react'; // Removed useState, useEffect
 import { Routes, Route, Navigate } from 'react-router-dom';
 
 // Auth & client
@@ -21,7 +21,7 @@ import SupervisorAreaView from './pages/SupervisorAreaView.jsx';
 import SiteReportPage from './pages/SiteReportPage.jsx';
 
 // ---
-// FIX 1: All components moved to the top level, outside the 'App' function.
+// All components moved to the top level, outside the 'App' function.
 // ---
 
 // Small UI helpers
@@ -55,61 +55,31 @@ function RequireAuth({ children }) {
   return children;
 }
 
+//
+// --- THIS COMPONENT IS NOW MUCH SIMPLER ---
+//
 function AppLayout() {
-  const { session } = useAuth();
-  const [profile, setProfile] = useState(null);
-  const [loadingProfile, setLoadingProfile] = useState(true);
+  // 1. Get session AND profile directly from the context
+  const { session, profile, loading } = useAuth();
 
-  useEffect(() => {
-    if (session?.user) {
-      const fetchProfile = async () => {
-        try {
-          // console.log("Forcing Supabase auth refresh...");
-          // await supabase.auth.refreshSession(); // <-- THIS WAS THE INFINITE LOOP. REMOVED.
-          // console.log("Auth refresh complete. Fetching profile...");
+  // 2. We no longer need the useEffect or local state to fetch the profile.
+  // The context now handles it.
 
-          const { data, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id);
-
-          if (error) {
-            throw error;
-          }
-
-          if (data && data.length === 1) {
-            setProfile(data[0]);
-          } else if (data && data.length > 1) {
-            throw new Error("Multiple profiles found for the same user ID.");
-          } else {
-            throw new Error("No profile found for this user.");
-          }
-
-        } catch (e) {
-          console.error("Failed to fetch profile in AppLayout:", e);
-          setProfile(null);
-        } finally {
-          setLoadingProfile(false);
-        }
-      };
-      fetchProfile();
-    } else {
-      setLoadingProfile(false);
-    }
-  }, [session]);
-
-  if (loadingProfile) {
+  if (loading) {
     return <LoadingScreen />;
   }
 
   if (!profile) {
+    // This will catch users who are logged in but have no profile
     return <ProfileNotFound onSignOut={() => supabase.auth.signOut()} />;
   }
 
   // Once the profile is loaded, render the correct layout.
+  // --- THIS IS THE FIX ---
+  // We convert the role to lowercase to be safe.
   switch (String(profile.role).toLowerCase()) {
     case 'admin':
-    case 'administrator':
+    case 'super_admin':
       return <AdminLayout session={session} profile={profile} />;
 
     case 'supervisor':
@@ -125,6 +95,7 @@ function AppLayout() {
 }
 
 export default function App() {
+  // This component is the same
   const { session, loading } = useAuth();
 
   if (loading) return <LoadingScreen />;
