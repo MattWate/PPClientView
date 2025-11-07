@@ -1,3 +1,4 @@
+// src/contexts/AuthContext.jsx
 import React, { createContext, useState, useEffect, useContext, useMemo } from 'react';
 import { supabase } from '../services/supabaseClient.js';
 
@@ -5,45 +6,20 @@ const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
-  const [profile, setProfile] = useState(null); // <-- ADDED
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // This is just for the session
 
   useEffect(() => {
-    // 1. Fetch the initial session AND profile on load
-    const getSessionAndProfile = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+    // 1. Get the initial session on app load
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      setLoading(false); // <-- Unblock the app as soon as session is known
+    });
 
-      if (session) {
-        // If a session exists, fetch the user's profile
-        const { data: userProfile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-        setProfile(userProfile);
-      }
-      setLoading(false);
-    };
-
-    getSessionAndProfile();
-
-    // 2. Set up the auth listener to fetch profile on changes
+    // 2. Listen for future auth changes (login, logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      (_event, session) => {
         setSession(session);
-        if (session) {
-          const { data: userProfile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-          setProfile(userProfile);
-        } else {
-          setProfile(null);
-        }
-        // Set loading to false only after the session and profile (or lack thereof) are known
-        setLoading(false);
+        // Loading is already false, so we just update the session
       }
     );
 
@@ -52,14 +28,12 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  // 3. Provide 'profile' in the context value
+  // The context now only provides the session and its loading state.
   const value = useMemo(() => ({
     session,
-    profile, // <-- ADDED
     loading,
-  }), [session, profile, loading]);
+  }), [session, loading]);
 
-  // App.jsx will now handle the loading screen
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
