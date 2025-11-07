@@ -9,6 +9,8 @@ export default function Sidebar({ user, profile, currentPage, setCurrentPage }) 
       { name: 'Sites & Zones', icon: 'fa-building', page: 'sites' },
       { name: 'Staff', icon: 'fa-users', page: 'staff' },
       { name: 'Task Management', icon: 'fa-clipboard-list', page: 'tasks' },
+      // --- ADDED THIS LINE ---
+      { name: 'Assignments', icon: 'fa-user-cog', page: 'assignments' },
     ],
     supervisor: [
       { name: 'Dashboard', icon: 'fa-tachometer-alt', page: 'dashboard' },
@@ -43,7 +45,8 @@ export default function Sidebar({ user, profile, currentPage, setCurrentPage }) 
             onClick={(e) => {
               e.preventDefault();
               setCurrentPage(item.page);
-              window.location.hash = `/${item.page}`;
+              // --- REMOVED THIS LINE ---
+              // window.location.hash = `/${item.page}`;
             }}
             className={`flex items-center px-4 py-2.5 text-sm font-medium rounded-md ${
               currentPage === item.page ? 'bg-gray-700' : 'hover:bg-gray-700'
@@ -63,4 +66,3 @@ export default function Sidebar({ user, profile, currentPage, setCurrentPage }) 
     </aside>
   );
 }
-
