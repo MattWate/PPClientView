@@ -82,7 +82,9 @@ export default function AdminLayout({ session, profile }) {
     
     if (current !== expected) {
       console.log('Setting hash to', expected);
-      window.history.replaceState(null, '', expected);
+      // --- THIS IS THE FIX ---
+      // Changed from window.history.replaceState to window.location.hash
+      window.location.hash = expected;
     }
   }, [currentPage]);
 
