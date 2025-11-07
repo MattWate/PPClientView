@@ -20,10 +20,6 @@ import CleanerAreaView from './pages/CleanerAreaView.jsx';
 import SupervisorAreaView from './pages/SupervisorAreaView.jsx';
 import SiteReportPage from './pages/SiteReportPage.jsx';
 
-// ---
-// All components moved to the top level, outside the 'App' function.
-// ---
-
 // Small UI helpers
 const LoadingScreen = () => (
   <div className="flex items-center justify-center h-screen bg-gray-100">
@@ -50,29 +46,29 @@ const ProfileNotFound = ({ onSignOut }) => (
 function RequireAuth({ children }) {
   const { session, loading } = useAuth();
 
-  if (loading) return <LoadingScreen />; // This is just for the session
+  if (loading) return <LoadingScreen />;
   if (!session) return <Navigate to="/login" replace />;
   return children;
 }
 
-//
-// --- THIS COMPONENT CONTAINS THE FINAL FIX ---
-//
 function AppLayout() {
   const { session } = useAuth();
   const [profile, setProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(true);
+  const [profileError, setProfileError] = useState(null);
 
   useEffect(() => {
-    // We wrap all logic in an async function
     const fetchProfile = async () => {
+      console.log('🔍 AppLayout: Starting profile fetch...'); // DEBUG
       try {
         if (!session?.user?.id) {
-          // If there's no user ID, there's no profile to get.
-          console.log('AppLayout: No user ID in session.');
+          console.log('❌ AppLayout: No user ID in session'); // DEBUG
           setProfile(null);
-          return; // Exit early
+          setProfileError('No user session found');
+          return;
         }
+
+        console.log('📡 AppLayout: Fetching profile for user:', session.user.id); // DEBUG
 
         const { data: userProfile, error } = await supabase
           .from('profiles')
@@ -81,66 +77,74 @@ function AppLayout() {
           .single();
 
         if (error) {
-          console.error('Error fetching profile:', error.message);
+          console.error('❌ AppLayout: Profile fetch error:', error); // DEBUG
           setProfile(null);
+          setProfileError(error.message);
         } else {
+          console.log('✅ AppLayout: Profile loaded successfully:', userProfile); // DEBUG
           setProfile(userProfile);
+          setProfileError(null);
         }
       } catch (e) {
-        console.error('Critical error in fetchProfile:', e);
+        console.error('💥 AppLayout: Critical error in fetchProfile:', e); // DEBUG
         setProfile(null);
+        setProfileError(e.message);
       } finally {
-        // **THIS IS THE FIX**: This block will run *no matter what*
-        // happens in the 'try' or 'catch' blocks, ensuring
-        // the loading screen always disappears.
+        console.log('🏁 AppLayout: Profile fetch complete'); // DEBUG
         setProfileLoading(false);
       }
     };
 
-    // Set loading to true *before* calling the fetch function.
-    // The function itself is now responsible for setting it to false.
     setProfileLoading(true);
     fetchProfile();
+  }, [session?.user?.id]);
 
-  }, [session?.user?.id]); // Re-run only if the user ID changes
-
-  // 1. Show loading screen while profile is being fetched
+  // Show loading screen while profile is being fetched
   if (profileLoading) {
+    console.log('⏳ AppLayout: Showing loading screen'); // DEBUG
     return <LoadingScreen />;
   }
 
-  // 2. After loading, if profile is still null, show the error
+  // After loading, if profile is still null, show the error
   if (!profile) {
+    console.log('⚠️ AppLayout: No profile found, showing error screen'); // DEBUG
+    console.log('Profile Error:', profileError); // DEBUG
     return <ProfileNotFound onSignOut={() => supabase.auth.signOut()} />;
   }
 
-  // 3. If loading is done and profile exists, show the correct dashboard
+  // If loading is done and profile exists, show the correct dashboard
+  console.log('🎯 AppLayout: Routing to role:', profile.role); // DEBUG
+  
   switch (String(profile.role).toLowerCase()) {
     case 'admin':
     case 'super_admin':
+      console.log('✨ AppLayout: Rendering AdminLayout'); // DEBUG
       return <AdminLayout session={session} profile={profile} />;
 
     case 'supervisor':
+      console.log('✨ AppLayout: Rendering SupervisorLayout'); // DEBUG
       return <SupervisorLayout session={session} profile={profile} />;
 
     case 'cleaner':
+      console.log('✨ AppLayout: Rendering CleanerLayout'); // DEBUG
       return <CleanerLayout session={session} profile={profile} />;
 
     default:
-      // A user with an unknown role
+      console.log('❓ AppLayout: Unknown role, showing error'); // DEBUG
       return <ProfileNotFound onSignOut={() => supabase.auth.signOut()} />;
   }
 }
 
 export default function App() {
-  // This 'loading' is now only for the session, so it will be very fast
   const { session, loading } = useAuth();
+
+  console.log('🚀 App: Render - session:', !!session, 'loading:', loading); // DEBUG
 
   if (loading) return <LoadingScreen />;
 
   return (
     <Routes>
-      {/* Public routes are no longer blocked */}
+      {/* Public routes */}
       <Route path="/" element={<PublicHomePage />} />
       <Route path="/login" element={<Login />} />
       <Route path="/public-home" element={<PublicHomePage />} />
