@@ -1,5 +1,5 @@
 // src/App.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 
 // Auth & client
@@ -55,42 +55,48 @@ function AppLayout() {
   const { session } = useAuth();
   const [profile, setProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(true);
-  const [profileError, setProfileError] = useState(null);
+  
+  // Use a ref to track if we've already fetched for this user ID
+  const fetchedUserIdRef = useRef(null);
 
   useEffect(() => {
+    const userId = session?.user?.id;
+    
+    // If we've already fetched for this user, don't fetch again
+    if (fetchedUserIdRef.current === userId) {
+      return;
+    }
+
     const fetchProfile = async () => {
-      console.log('🔍 AppLayout: Starting profile fetch...'); // DEBUG
       try {
-        if (!session?.user?.id) {
-          console.log('❌ AppLayout: No user ID in session'); // DEBUG
+        if (!userId) {
+          console.log('No user ID in session');
           setProfile(null);
-          setProfileError('No user session found');
+          setProfileLoading(false);
           return;
         }
 
-        console.log('📡 AppLayout: Fetching profile for user:', session.user.id); // DEBUG
+        console.log('Fetching profile for user:', userId);
 
         const { data: userProfile, error } = await supabase
           .from('profiles')
           .select('*')
-          .eq('id', session.user.id)
+          .eq('id', userId)
           .single();
 
         if (error) {
-          console.error('❌ AppLayout: Profile fetch error:', error); // DEBUG
+          console.error('Error fetching profile:', error.message);
           setProfile(null);
-          setProfileError(error.message);
         } else {
-          console.log('✅ AppLayout: Profile loaded successfully:', userProfile); // DEBUG
+          console.log('Profile loaded successfully');
           setProfile(userProfile);
-          setProfileError(null);
+          // Mark this user ID as fetched
+          fetchedUserIdRef.current = userId;
         }
       } catch (e) {
-        console.error('💥 AppLayout: Critical error in fetchProfile:', e); // DEBUG
+        console.error('Critical error in fetchProfile:', e);
         setProfile(null);
-        setProfileError(e.message);
       } finally {
-        console.log('🏁 AppLayout: Profile fetch complete'); // DEBUG
         setProfileLoading(false);
       }
     };
@@ -99,46 +105,35 @@ function AppLayout() {
     fetchProfile();
   }, [session?.user?.id]);
 
-  // Show loading screen while profile is being fetched
+  // 1. Show loading screen while profile is being fetched
   if (profileLoading) {
-    console.log('⏳ AppLayout: Showing loading screen'); // DEBUG
     return <LoadingScreen />;
   }
 
-  // After loading, if profile is still null, show the error
+  // 2. After loading, if profile is still null, show the error
   if (!profile) {
-    console.log('⚠️ AppLayout: No profile found, showing error screen'); // DEBUG
-    console.log('Profile Error:', profileError); // DEBUG
     return <ProfileNotFound onSignOut={() => supabase.auth.signOut()} />;
   }
 
-  // If loading is done and profile exists, show the correct dashboard
-  console.log('🎯 AppLayout: Routing to role:', profile.role); // DEBUG
-  
+  // 3. If loading is done and profile exists, show the correct dashboard
   switch (String(profile.role).toLowerCase()) {
     case 'admin':
     case 'super_admin':
-      console.log('✨ AppLayout: Rendering AdminLayout'); // DEBUG
       return <AdminLayout session={session} profile={profile} />;
 
     case 'supervisor':
-      console.log('✨ AppLayout: Rendering SupervisorLayout'); // DEBUG
       return <SupervisorLayout session={session} profile={profile} />;
 
     case 'cleaner':
-      console.log('✨ AppLayout: Rendering CleanerLayout'); // DEBUG
       return <CleanerLayout session={session} profile={profile} />;
 
     default:
-      console.log('❓ AppLayout: Unknown role, showing error'); // DEBUG
       return <ProfileNotFound onSignOut={() => supabase.auth.signOut()} />;
   }
 }
 
 export default function App() {
   const { session, loading } = useAuth();
-
-  console.log('🚀 App: Render - session:', !!session, 'loading:', loading); // DEBUG
 
   if (loading) return <LoadingScreen />;
 
