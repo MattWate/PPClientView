@@ -11,6 +11,28 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let mounted = true;
+    let initialLoadComplete = false;
+
+    const fetchProfile = async (userId) => {
+      try {
+        const { data: userProfile, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
+
+        if (error) {
+          console.error('❌ Profile error:', error);
+          return null;
+        }
+        
+        console.log('✅ Profile loaded');
+        return userProfile;
+      } catch (e) {
+        console.error('💥 Profile fetch error:', e);
+        return null;
+      }
+    };
 
     const initAuth = async () => {
       try {
@@ -32,22 +54,8 @@ export function AuthProvider({ children }) {
         // If there's a session, fetch the profile
         if (session?.user?.id) {
           console.log('📡 Fetching profile...');
-          
-          const { data: userProfile, error: profileError } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-
-          if (profileError) {
-            console.error('❌ Profile error:', profileError);
-            // Don't throw - just set profile to null
-            // This allows the app to continue and show the "profile not found" screen
-            if (mounted) setProfile(null);
-          } else if (mounted) {
-            console.log('✅ Profile loaded');
-            setProfile(userProfile);
-          }
+          const userProfile = await fetchProfile(session.user.id);
+          if (mounted) setProfile(userProfile);
         } else {
           console.log('No session, skipping profile fetch');
           if (mounted) setProfile(null);
@@ -61,6 +69,7 @@ export function AuthProvider({ children }) {
       } finally {
         if (mounted) {
           console.log('🏁 Auth initialization complete');
+          initialLoadComplete = true;
           setLoading(false);
         }
       }
@@ -71,33 +80,31 @@ export function AuthProvider({ children }) {
     // Listen for auth changes
     console.log('👂 Setting up auth listener...');
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      async (event, newSession) => {
         console.log('🔔 Auth state changed:', event);
         
         if (!mounted) return;
         
-        setSession(session);
-
-        if (session?.user?.id) {
-          // Fetch profile when user logs in
-          const { data: userProfile, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-
-          if (error) {
-            console.error('Profile fetch error on auth change:', error);
-          }
-
-          if (mounted) {
-            setProfile(userProfile || null);
-          }
-        } else {
-          if (mounted) setProfile(null);
+        // Only process changes after initial load is complete
+        if (!initialLoadComplete) {
+          console.log('⏭️ Initial load not complete, skipping event');
+          return;
         }
         
-        if (mounted) setLoading(false);
+        setSession(newSession);
+
+        if (newSession?.user?.id) {
+          const userProfile = await fetchProfile(newSession.user.id);
+          if (mounted) {
+            setProfile(userProfile);
+            setLoading(false);
+          }
+        } else {
+          if (mounted) {
+            setProfile(null);
+            setLoading(false);
+          }
+        }
       }
     );
 
