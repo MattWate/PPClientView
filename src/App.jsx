@@ -1,5 +1,5 @@
 // src/App.jsx
-import React, { useState, useEffect } from 'react'; // <-- Make sure to import useState/useEffect
+import React, { useState, useEffect } from 'react'; // <-- Ensure useState/useEffect are imported
 import { Routes, Route, Navigate } from 'react-router-dom';
 
 // Auth & client
@@ -50,7 +50,7 @@ const ProfileNotFound = ({ onSignOut }) => (
 function RequireAuth({ children }) {
   const { session, loading } = useAuth();
 
-  if (loading) return <LoadingScreen />; // This is now JUST for the session
+  if (loading) return <LoadingScreen />; // This is just for the session
   if (!session) return <Navigate to="/login" replace />;
   return children;
 }
@@ -86,6 +86,11 @@ function AppLayout() {
       };
 
       fetchProfile();
+    } else {
+      // --- THIS IS THE FIX ---
+      // If there's no user ID (e.g., session is valid but user is null),
+      // we must stop loading to prevent an infinite spinner.
+      setProfileLoading(false);
     }
   }, [session?.user?.id]); // Re-run only if the user ID changes
 
@@ -94,7 +99,7 @@ function AppLayout() {
     return <LoadingScreen />;
   }
 
-  // 5. This is the original "Profile Not Found" error, now correct
+  // 5. This will now correctly catch failed fetches or missing user IDs
   if (!profile) {
     return <ProfileNotFound onSignOut={() => supabase.auth.signOut()} />;
   }
