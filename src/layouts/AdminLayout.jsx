@@ -19,7 +19,6 @@ class LocalErrorBoundary extends React.Component {
     return { error };
   }
   componentDidCatch(error, info) {
-    // Keep a console trail during debugging
     console.error('AdminLayout child error:', error, info);
   }
   render() {
@@ -42,18 +41,15 @@ function getPageFromHash() {
 }
 
 export default function AdminLayout({ session, profile }) {
-  // Guard: if somehow rendered without a user, render nothing (App should prevent this)
   if (!session?.user) return null;
 
-  // Provide safe values to children to avoid "reading 'role' of undefined" crashes
   const safeProfile = useMemo(() => {
     const fallbackEmail = session?.user?.email ?? 'user@example.com';
     return {
       id: profile?.id ?? session?.user?.id ?? null,
       full_name: profile?.full_name ?? fallbackEmail,
-      role: profile?.role ?? 'admin',     // this layout is for admins
+      role: profile?.role ?? 'admin',
       company_id: profile?.company_id ?? null,
-      // keep original fields if present
       ...profile,
     };
   }, [profile, session]);
@@ -64,17 +60,29 @@ export default function AdminLayout({ session, profile }) {
   useEffect(() => {
     const onHashChange = () => {
       const next = getPageFromHash();
-      setCurrentPage(prev => (prev === next ? prev : next));
+      setCurrentPage(prev => {
+        // Only update if actually different
+        if (prev !== next) {
+          console.log('Hash changed from', prev, 'to', next);
+          return next;
+        }
+        return prev;
+      });
     };
+    
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
   // When currentPage changes via sidebar clicks, reflect it in the hash
+  // But DON'T do this if the hash already matches (to avoid loops)
   useEffect(() => {
     const expected = `#/${currentPage}`;
-    if (window.location.hash !== expected) {
-      window.location.hash = `/${currentPage}`;
+    const current = window.location.hash;
+    
+    if (current !== expected) {
+      console.log('Setting hash to', expected);
+      window.history.replaceState(null, '', expected);
     }
   }, [currentPage]);
 
@@ -98,8 +106,6 @@ export default function AdminLayout({ session, profile }) {
         return <AssignmentsPage profile={safeProfile} />;
       case 'dashboard':
       default:
-        // --- THIS IS THE FIX ---
-        // Pass the 'navigate' function to the DashboardPage as the 'setCurrentPage' prop.
         return <DashboardPage profile={safeProfile} setCurrentPage={navigate} />;
     }
   };
@@ -110,7 +116,7 @@ export default function AdminLayout({ session, profile }) {
         user={session.user}
         profile={safeProfile}
         currentPage={currentPage}
-        setCurrentPage={navigate}  // ensure we control nav + hash
+        setCurrentPage={navigate}
       />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header title={currentPage} />
@@ -123,4 +129,3 @@ export default function AdminLayout({ session, profile }) {
     </div>
   );
 }
-
