@@ -1,5 +1,5 @@
 // src/App.jsx
-import React from 'react'; // Removed useState, useEffect
+import React, { useState, useEffect } from 'react'; // <-- Make sure to import useState/useEffect
 import { Routes, Route, Navigate } from 'react-router-dom';
 
 // Auth & client
@@ -50,33 +50,56 @@ const ProfileNotFound = ({ onSignOut }) => (
 function RequireAuth({ children }) {
   const { session, loading } = useAuth();
 
-  if (loading) return <LoadingScreen />;
+  if (loading) return <LoadingScreen />; // This is now JUST for the session
   if (!session) return <Navigate to="/login" replace />;
   return children;
 }
 
 //
-// --- THIS COMPONENT IS NOW MUCH SIMPLER ---
+// --- THIS COMPONENT IS NOW FIXED ---
 //
 function AppLayout() {
-  // 1. Get session AND profile directly from the context
-  const { session, profile, loading } = useAuth();
+  // 1. Get session from context (we know it exists)
+  const { session } = useAuth();
+  
+  // 2. Create local state to hold the profile and its loading status
+  const [profile, setProfile] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(true);
 
-  // 2. We no longer need the useEffect or local state to fetch the profile.
-  // The context now handles it.
+  // 3. Fetch the profile *inside* this component
+  useEffect(() => {
+    if (session?.user?.id) {
+      const fetchProfile = async () => {
+        setProfileLoading(true);
+        const { data: userProfile, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
 
-  if (loading) {
+        if (error) {
+          console.error('Error fetching profile:', error.message);
+        }
+        
+        setProfile(userProfile);
+        setProfileLoading(false);
+      };
+
+      fetchProfile();
+    }
+  }, [session?.user?.id]); // Re-run only if the user ID changes
+
+  // 4. Show a loading screen *while fetching the profile*
+  if (profileLoading) {
     return <LoadingScreen />;
   }
 
+  // 5. This is the original "Profile Not Found" error, now correct
   if (!profile) {
-    // This will catch users who are logged in but have no profile
     return <ProfileNotFound onSignOut={() => supabase.auth.signOut()} />;
   }
 
   // Once the profile is loaded, render the correct layout.
-  // --- THIS IS THE FIX ---
-  // We convert the role to lowercase to be safe.
   switch (String(profile.role).toLowerCase()) {
     case 'admin':
     case 'super_admin':
@@ -95,19 +118,21 @@ function AppLayout() {
 }
 
 export default function App() {
-  // This component is the same
+  // This 'loading' is now only for the session, so it will be very fast
   const { session, loading } = useAuth();
 
   if (loading) return <LoadingScreen />;
 
   return (
     <Routes>
-      {/* FIX 2: Set PublicHomePage as the default route */}
+      {/* Public routes are no longer blocked */}
       <Route path="/" element={<PublicHomePage />} />
       <Route path="/login" element={<Login />} />
       <Route path="/public-home" element={<PublicHomePage />} />
       <Route path="/public-scan/:areaId" element={<PublicScanPage />} />
       <Route path="/scan/:areaId" element={<ScanHandlerPage />} />
+      
+      {/* Protected Routes */}
       <Route
         path="/app/*"
         element={
@@ -128,6 +153,8 @@ export default function App() {
         path="/report/site" 
         element={<RequireAuth><SiteReportPage /></RequireAuth>} 
       />
+      
+      {/* Fallback redirect */}
       <Route
         path="*"
         element={session ? <Navigate to="/app" replace /> : <Navigate to="/login" replace />}
@@ -135,4 +162,3 @@ export default function App() {
     </Routes>
   );
 }
-
