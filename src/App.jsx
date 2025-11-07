@@ -1,5 +1,5 @@
 // src/App.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 
 // Auth & client
@@ -51,72 +51,19 @@ function RequireAuth({ children }) {
   return children;
 }
 
+// This component now just routes based on role - NO fetching!
 function AppLayout() {
-  const { session } = useAuth();
-  const [profile, setProfile] = useState(null);
-  const [profileLoading, setProfileLoading] = useState(true);
-  
-  // Use a ref to track if we've already fetched for this user ID
-  const fetchedUserIdRef = useRef(null);
+  const { session, profile } = useAuth();
 
-  useEffect(() => {
-    const userId = session?.user?.id;
-    
-    // If we've already fetched for this user, don't fetch again
-    if (fetchedUserIdRef.current === userId) {
-      return;
-    }
-
-    const fetchProfile = async () => {
-      try {
-        if (!userId) {
-          console.log('No user ID in session');
-          setProfile(null);
-          setProfileLoading(false);
-          return;
-        }
-
-        console.log('Fetching profile for user:', userId);
-
-        const { data: userProfile, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .single();
-
-        if (error) {
-          console.error('Error fetching profile:', error.message);
-          setProfile(null);
-        } else {
-          console.log('Profile loaded successfully');
-          setProfile(userProfile);
-          // Mark this user ID as fetched
-          fetchedUserIdRef.current = userId;
-        }
-      } catch (e) {
-        console.error('Critical error in fetchProfile:', e);
-        setProfile(null);
-      } finally {
-        setProfileLoading(false);
-      }
-    };
-
-    setProfileLoading(true);
-    fetchProfile();
-  }, [session?.user?.id]);
-
-  // 1. Show loading screen while profile is being fetched
-  if (profileLoading) {
-    return <LoadingScreen />;
-  }
-
-  // 2. After loading, if profile is still null, show the error
+  // If no profile, show error
   if (!profile) {
     return <ProfileNotFound onSignOut={() => supabase.auth.signOut()} />;
   }
 
-  // 3. If loading is done and profile exists, show the correct dashboard
-  switch (String(profile.role).toLowerCase()) {
+  // Route based on role
+  const roleKey = String(profile.role || '').toLowerCase();
+  
+  switch (roleKey) {
     case 'admin':
     case 'super_admin':
       return <AdminLayout session={session} profile={profile} />;
