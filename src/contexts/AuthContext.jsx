@@ -6,37 +6,100 @@ const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
-  const [loading, setLoading] = useState(true); // This is just for the session
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 1. Get the initial session on app load
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false); // <-- Unblock the app as soon as session is known
-    });
+    let mounted = true;
 
-    // 2. Listen for future auth changes (login, logout)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+    const initAuth = async () => {
+      try {
+        // Get the initial session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) throw sessionError;
+        
+        if (!mounted) return;
+        
         setSession(session);
-        // Loading is already false, so we just update the session
+
+        // If there's a session, fetch the profile
+        if (session?.user?.id) {
+          const { data: userProfile, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+
+          if (profileError) {
+            console.error('Error fetching profile:', profileError);
+            setProfile(null);
+          } else if (mounted) {
+            setProfile(userProfile);
+          }
+        } else {
+          setProfile(null);
+        }
+      } catch (e) {
+        console.error('Auth initialization error:', e);
+        if (mounted) {
+          setSession(null);
+          setProfile(null);
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    initAuth();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (!mounted) return;
+        
+        setSession(session);
+
+        if (session?.user?.id) {
+          // Fetch profile when user logs in
+          const { data: userProfile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+
+          if (mounted) {
+            setProfile(userProfile);
+          }
+        } else {
+          setProfile(null);
+        }
+        
+        setLoading(false);
       }
     );
 
     return () => {
+      mounted = false;
       subscription?.unsubscribe();
     };
   }, []);
 
-  // The context now only provides the session and its loading state.
   const value = useMemo(() => ({
     session,
+    profile,
     loading,
-  }), [session, loading]);
+  }), [session, profile, loading]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
-  return useContext(AuthContext);
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
 }
