@@ -1,5 +1,5 @@
 // src/App.jsx
-import React, { useState, useEffect } from 'react'; // <-- Ensure useState/useEffect are imported
+import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 
 // Auth & client
@@ -56,21 +56,24 @@ function RequireAuth({ children }) {
 }
 
 //
-// --- THIS COMPONENT IS NOW FIXED ---
+// --- THIS COMPONENT CONTAINS THE FINAL FIX ---
 //
 function AppLayout() {
-  // 1. Get session from context (we know it exists)
   const { session } = useAuth();
-  
-  // 2. Create local state to hold the profile and its loading status
   const [profile, setProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(true);
 
-  // 3. Fetch the profile *inside* this component
   useEffect(() => {
-    if (session?.user?.id) {
-      const fetchProfile = async () => {
-        setProfileLoading(true);
+    // We wrap all logic in an async function
+    const fetchProfile = async () => {
+      try {
+        if (!session?.user?.id) {
+          // If there's no user ID, there's no profile to get.
+          console.log('AppLayout: No user ID in session.');
+          setProfile(null);
+          return; // Exit early
+        }
+
         const { data: userProfile, error } = await supabase
           .from('profiles')
           .select('*')
@@ -79,32 +82,39 @@ function AppLayout() {
 
         if (error) {
           console.error('Error fetching profile:', error.message);
+          setProfile(null);
+        } else {
+          setProfile(userProfile);
         }
-        
-        setProfile(userProfile);
+      } catch (e) {
+        console.error('Critical error in fetchProfile:', e);
+        setProfile(null);
+      } finally {
+        // **THIS IS THE FIX**: This block will run *no matter what*
+        // happens in the 'try' or 'catch' blocks, ensuring
+        // the loading screen always disappears.
         setProfileLoading(false);
-      };
+      }
+    };
 
-      fetchProfile();
-    } else {
-      // --- THIS IS THE FIX ---
-      // If there's no user ID (e.g., session is valid but user is null),
-      // we must stop loading to prevent an infinite spinner.
-      setProfileLoading(false);
-    }
+    // Set loading to true *before* calling the fetch function.
+    // The function itself is now responsible for setting it to false.
+    setProfileLoading(true);
+    fetchProfile();
+
   }, [session?.user?.id]); // Re-run only if the user ID changes
 
-  // 4. Show a loading screen *while fetching the profile*
+  // 1. Show loading screen while profile is being fetched
   if (profileLoading) {
     return <LoadingScreen />;
   }
 
-  // 5. This will now correctly catch failed fetches or missing user IDs
+  // 2. After loading, if profile is still null, show the error
   if (!profile) {
     return <ProfileNotFound onSignOut={() => supabase.auth.signOut()} />;
   }
 
-  // Once the profile is loaded, render the correct layout.
+  // 3. If loading is done and profile exists, show the correct dashboard
   switch (String(profile.role).toLowerCase()) {
     case 'admin':
     case 'super_admin':
