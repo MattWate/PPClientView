@@ -5,15 +5,45 @@ const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
+  const [profile, setProfile] = useState(null); // <-- ADDED
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // This listener now ONLY manages the session.
-    // It no longer fetches the profile, which prevents the hang on login.
+    // 1. Fetch the initial session AND profile on load
+    const getSessionAndProfile = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setSession(session);
+
+      if (session) {
+        // If a session exists, fetch the user's profile
+        const { data: userProfile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+        setProfile(userProfile);
+      }
+      setLoading(false);
+    };
+
+    getSessionAndProfile();
+
+    // 2. Set up the auth listener to fetch profile on changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      async (_event, session) => {
         setSession(session);
-        setLoading(false); // Set loading to false as soon as the session is known.
+        if (session) {
+          const { data: userProfile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+          setProfile(userProfile);
+        } else {
+          setProfile(null);
+        }
+        // Set loading to false only after the session and profile (or lack thereof) are known
+        setLoading(false);
       }
     );
 
@@ -22,13 +52,14 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  // The context now only provides the session and the initial loading state.
+  // 3. Provide 'profile' in the context value
   const value = useMemo(() => ({
     session,
+    profile, // <-- ADDED
     loading,
-  }), [session, loading]);
+  }), [session, profile, loading]);
 
-  // We no longer show a blank screen while loading, App.jsx handles it.
+  // App.jsx will now handle the loading screen
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
