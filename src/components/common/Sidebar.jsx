@@ -9,12 +9,10 @@ export default function Sidebar({ user, profile, currentPage, setCurrentPage }) 
       { name: 'Sites & Zones', icon: 'fa-building', page: 'sites' },
       { name: 'Staff', icon: 'fa-users', page: 'staff' },
       { name: 'Task Management', icon: 'fa-clipboard-list', page: 'tasks' },
-      // --- ADDED THIS LINE ---
       { name: 'Assignments', icon: 'fa-user-cog', page: 'assignments' },
     ],
     supervisor: [
       { name: 'Dashboard', icon: 'fa-tachometer-alt', page: 'dashboard' },
-      // Add other supervisor links here if needed
     ],
     cleaner: [
       { name: 'My Tasks', icon: 'fa-clipboard-check', page: 'tasks' },
@@ -25,9 +23,14 @@ export default function Sidebar({ user, profile, currentPage, setCurrentPage }) 
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    // Manually clear the hash and reload to ensure a clean state
     window.location.hash = '';
     window.location.reload();
+  };
+
+  const handleNavClick = (e, page) => {
+    e.preventDefault();
+    console.log('Sidebar: Navigating to', page);
+    setCurrentPage(page);
   };
 
   return (
@@ -38,18 +41,12 @@ export default function Sidebar({ user, profile, currentPage, setCurrentPage }) 
       </div>
       <nav className="flex-1 px-2 py-4 space-y-2">
         {currentNavItems.map(item => (
-          // --- REVERTED: Use <a> tags with onClick for hash navigation ---
           <a
             key={item.name}
             href={`#/${item.page}`}
-            onClick={(e) => {
-              e.preventDefault();
-              setCurrentPage(item.page);
-              // --- REMOVED THIS LINE ---
-              // window.location.hash = `/${item.page}`;
-            }}
-            className={`flex items-center px-4 py-2.5 text-sm font-medium rounded-md ${
-              currentPage === item.page ? 'bg-gray-700' : 'hover:bg-gray-700'
+            onClick={(e) => handleNavClick(e, item.page)}
+            className={`flex items-center px-4 py-2.5 text-sm font-medium rounded-md transition-colors ${
+              currentPage === item.page ? 'bg-gray-700 text-white' : 'text-gray-300 hover:bg-gray-700 hover:text-white'
             }`}
           >
             <i className={`fas ${item.icon} w-6 text-center mr-3`}></i> {item.name}
