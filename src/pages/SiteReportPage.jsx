@@ -1,46 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-// import { supabase } from '../services/supabaseClient.js'; // This is the original import.
+import { supabase } from '../services/supabaseClient.js';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-
-// --- Supabase Client (Placeholder) ---
-// To resolve build errors in this environment, a placeholder client is used.
-// In your actual project, you should remove this and use your original import from '../services/supabaseClient.js'.
-const supabase = {
-    from: (table) => ({
-        select: (columns) => ({
-            eq: (column, value) => ({
-                single: () => {
-                    if (table === 'sites') {
-                        return Promise.resolve({ data: { name: 'Selected Site Name' }, error: null });
-                    }
-                    return Promise.resolve({ data: null, error: new Error('Table not found') });
-                }
-            })
-        })
-    }),
-    rpc: (functionName, params) => {
-        if (functionName === 'get_compliance_snapshot') {
-            // Return realistic mock data for the report preview.
-            const mockReport = {
-                summary: {
-                    overall_score: 92.3,
-                    tasks_completed: 125,
-                    tasks_scheduled: 135,
-                    tasks_missed: 10,
-                },
-                missed_tasks: [
-                    { task: 'Clean Lobby Windows', area: 'Main Lobby' },
-                    { task: 'Restock Paper Towels', area: 'Restroom #2' },
-                    { task: 'Empty Trash Bins', area: 'Kitchenette' },
-                ],
-            };
-            return Promise.resolve({ data: mockReport, error: null });
-        }
-        return Promise.resolve({ data: null, error: new Error('RPC not found') });
-    }
-};
-
 
 // --- Reusable KPI Card for the Report ---
 const ReportKpiCard = ({ title, value, subtext, color }) => {
@@ -94,7 +55,7 @@ export default function SiteReportPage() {
                 if (siteError) throw siteError;
                 setSiteName(siteData.name);
 
-                // Call the new database function
+                // Call the database function
                 const { data, error: rpcError } = await supabase.rpc('get_compliance_snapshot', {
                     p_site_id: siteId,
                     p_start_date: startDate,
@@ -116,15 +77,33 @@ export default function SiteReportPage() {
     }, [siteId, startDate, endDate]);
 
     if (loading) {
-        return <div className="p-8 text-center">Generating your report, please wait...</div>;
+        return (
+            <div className="flex flex-col items-center justify-center min-h-screen p-8">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+                <p className="text-gray-600">Generating your report, please wait...</p>
+            </div>
+        );
     }
 
     if (error) {
-        return <div className="p-8 text-center text-red-600">Error: {error}</div>;
+        return (
+            <div className="flex items-center justify-center min-h-screen p-8">
+                <div className="max-w-md w-full bg-red-50 border border-red-200 rounded-lg p-6">
+                    <h3 className="text-lg font-semibold text-red-800 mb-2">Error</h3>
+                    <p className="text-red-600">{error}</p>
+                </div>
+            </div>
+        );
     }
 
     if (!reportData) {
-        return <div className="p-8 text-center">No data available for this report.</div>;
+        return (
+            <div className="flex items-center justify-center min-h-screen p-8">
+                <div className="max-w-md w-full bg-gray-50 border border-gray-200 rounded-lg p-6 text-center">
+                    <p className="text-gray-600">No data available for this report.</p>
+                </div>
+            </div>
+        );
     }
 
     // --- Data for Pie Chart (if issue_breakdown exists) ---
@@ -134,6 +113,17 @@ export default function SiteReportPage() {
     return (
         <div className="bg-gray-100 min-h-screen p-4 sm:p-6 lg:p-8">
             <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-xl p-6">
+                {/* --- Print Button (No-print class) --- */}
+                <div className="flex justify-end mb-4 no-print">
+                    <button 
+                        onClick={() => window.print()}
+                        className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+                    >
+                        <i className="fas fa-print"></i>
+                        Print Report
+                    </button>
+                </div>
+
                 {/* --- Report Header --- */}
                 <div className="border-b pb-4 mb-6">
                     <h1 className="text-3xl font-bold text-gray-800">Compliance Snapshot</h1>
@@ -144,7 +134,7 @@ export default function SiteReportPage() {
                 </div>
 
                 {/* --- Top-Line Summary --- */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
                     <ReportKpiCard
                         title="Overall Compliance"
                         value={`${reportData.summary.overall_score}%`}
@@ -195,4 +185,3 @@ export default function SiteReportPage() {
         </div>
     );
 }
-
