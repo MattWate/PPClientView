@@ -206,10 +206,7 @@ const TaskManagementModal = ({
 };
 
 /** -------- main dashboard -------- */
-export default function SupervisorDashboard({ profile: profileProp, session }) {
-  // Use prop if provided, otherwise fall back to context
-  const authContext = useAuth();
-  const profile = profileProp || authContext.profile;
+export default function SupervisorDashboard({ profile }) {
   const [zones, setZones] = useState([]);
   const [zoneCleanersMap, setZoneCleanersMap] = useState({});
   const [loading, setLoading] = useState(true);
@@ -218,10 +215,16 @@ export default function SupervisorDashboard({ profile: profileProp, session }) {
   const [selectedAreaId, setSelectedAreaId] = useState(null);
 
   const fetchData = useCallback(async () => {
-    if (!profile?.id || !profile?.company_id) return;
+    if (!profile?.id || !profile?.company_id) {
+      console.log('SupervisorDashboard: Missing profile data', { profile });
+      return;
+    }
+    
     try {
       setLoading(true); 
       setError(null);
+
+      console.log('SupervisorDashboard: Fetching zones for supervisor', profile.id);
 
       // Fetch zones assigned to this supervisor
       const { data: assignedZones, error: zonesError } = await supabase
@@ -233,6 +236,8 @@ export default function SupervisorDashboard({ profile: profileProp, session }) {
 
       const supervisorZones = (assignedZones || []).map(z => z.zones).filter(Boolean);
       const zoneIds = supervisorZones.map(z => z.id);
+      
+      console.log('SupervisorDashboard: Found zones', zoneIds);
       
       if (zoneIds.length === 0) { 
         setZones([]); 
@@ -327,7 +332,9 @@ export default function SupervisorDashboard({ profile: profileProp, session }) {
     }
   }, [profile]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { 
+    fetchData(); 
+  }, [fetchData]);
 
   const selectedArea = selectedAreaId 
     ? zones.flatMap(z => z.areas || []).find(a => a.id === selectedAreaId) 
@@ -347,7 +354,7 @@ export default function SupervisorDashboard({ profile: profileProp, session }) {
   );
 
   if (zones.length === 0) return (
-    <div className="p-12 text-center bg-gray-50 rounded-lg">
+    <div className="p-12 text-center bg-white rounded-lg shadow-md">
       <i className="fas fa-info-circle text-4xl text-gray-400 mb-4"></i>
       <h3 className="text-xl font-semibold text-gray-700 mb-2">No Zones Assigned</h3>
       <p className="text-gray-600">You haven't been assigned to any zones yet. Contact your administrator.</p>
