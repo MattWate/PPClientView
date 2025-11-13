@@ -1,60 +1,20 @@
 // src/layouts/SupervisorLayout.jsx
-import React, { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useMemo } from 'react';
 import { supabase } from '../services/supabaseClient';
-import { useAuth } from '../contexts/AuthContext';
 import SupervisorDashboard from '../pages/SupervisorDashboard.jsx';
-
-/* ---------- Sidebar (with Logout) ---------- */
-const Sidebar = ({ navLinks, profile, setCurrentPage, onLogout }) => (
-  <div className="w-64 bg-gray-800 text-white flex-shrink-0 hidden md:flex md:flex-col">
-    <div className="p-4">
-      <h2 className="text-xl font-bold">PristinePoint</h2>
-      <p className="text-sm text-gray-400">{profile?.full_name}</p>
-    </div>
-
-    <nav className="flex-1">
-      <ul>
-        {navLinks.map(link => (
-          <li key={link.name}>
-            <button
-              onClick={() => setCurrentPage(link.name.toLowerCase().replace(' ', '-'))}
-              className={`w-full text-left p-4 hover:bg-gray-700 ${link.current ? 'bg-gray-900' : ''}`}
-            >
-              {link.name}
-            </button>
-          </li>
-        ))}
-      </ul>
-    </nav>
-
-    {/* Logout action */}
-    <div className="p-4 border-t border-gray-700">
-      <button
-        onClick={onLogout}
-        className="w-full bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-md"
-      >
-        Log out
-      </button>
-    </div>
-  </div>
-);
-
-/* ---------- Optional header (kept simple) ---------- */
-const Header = ({ title, profile }) => (
-  <header className="bg-white shadow-md p-4 flex justify-between items-center">
-    <h1 className="text-2xl font-semibold text-gray-800 capitalize">{title.replace('-', ' ')}</h1>
-    <div>
-      <span className="text-gray-600">{profile?.full_name} ({profile?.role})</span>
-    </div>
-  </header>
-);
 
 /* ---------- Error boundary ---------- */
 class LocalErrorBoundary extends React.Component {
-  constructor(props) { super(props); this.state = { error: null }; }
-  static getDerivedStateFromError(error) { return { error }; }
-  componentDidCatch(error, info) { console.error('SupervisorLayout child error:', error, info); }
+  constructor(props) { 
+    super(props); 
+    this.state = { error: null }; 
+  }
+  static getDerivedStateFromError(error) { 
+    return { error }; 
+  }
+  componentDidCatch(error, info) { 
+    console.error('SupervisorLayout child error:', error, info); 
+  }
   render() {
     if (this.state.error) {
       return (
@@ -72,24 +32,6 @@ class LocalErrorBoundary extends React.Component {
 export default function SupervisorLayout({ session, profile }) {
   if (!session?.user) return null;
 
-  const navigate = useNavigate();
-  const authCtx = (() => { try { return useAuth(); } catch { return {}; } })() || {};
-  const { signOut } = authCtx;
-
-  const handleLogout = async () => {
-    try {
-      if (typeof signOut === 'function') {
-        await signOut();
-      } else {
-        await supabase.auth.signOut();
-      }
-    } finally {
-      navigate('/'); // send back to home/login
-    }
-  };
-
-  const [currentPage, setCurrentPage] = useState('dashboard');
-
   const safeProfile = useMemo(() => {
     const fallbackEmail = session?.user?.email ?? 'user@example.com';
     const baseProfile = profile || {};
@@ -102,42 +44,44 @@ export default function SupervisorLayout({ session, profile }) {
     };
   }, [profile, session]);
 
-  const supervisorNavLinks = [
-    { name: 'Dashboard',   current: currentPage === 'dashboard' },
-    { name: 'My Tasks',    current: currentPage === 'my-tasks' },
-    { name: 'Team Status', current: currentPage === 'team-status' },
-    { name: 'Reports',     current: currentPage === 'reports' },
-  ];
-
-  const renderPage = () => {
-    switch (currentPage) {
-      case 'dashboard':
-        return <SupervisorDashboard profile={safeProfile} session={session} />;
-      case 'my-tasks':
-        return <div className="p-6 bg-white rounded-lg shadow-md">My Tasks page coming soon.</div>;
-      case 'team-status':
-        return <div className="p-6 bg-white rounded-lg shadow-md">Team Status page coming soon.</div>;
-      case 'reports':
-        return <div className="p-6 bg-white rounded-lg shadow-md">Reports page coming soon.</div>;
-      default:
-        return <SupervisorDashboard profile={safeProfile} session={session} />;
-    }
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    window.location.href = '/';
   };
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <Sidebar
-        navLinks={supervisorNavLinks}
-        profile={safeProfile}
-        setCurrentPage={setCurrentPage}
-        onLogout={handleLogout}
-      />
-      <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-200">
-        <div className="container mx-auto px-6 py-8">
-          <LocalErrorBoundary>
-            {renderPage()}
-          </LocalErrorBoundary>
+    <div className="min-h-screen bg-gray-100">
+      {/* Top Header */}
+      <header className="bg-white shadow-sm sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+          <div className="flex items-center">
+            <i className="fas fa-gem text-2xl text-indigo-600 mr-3"></i>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">PristinePoint</h1>
+              <p className="text-xs text-gray-500">Supervisor Dashboard</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="text-right hidden sm:block">
+              <p className="text-sm font-medium text-gray-700">{safeProfile.full_name}</p>
+              <p className="text-xs text-gray-500 capitalize">{safeProfile.role}</p>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-md text-sm transition-colors"
+            >
+              <i className="fas fa-sign-out-alt"></i>
+              <span className="hidden sm:inline">Sign Out</span>
+            </button>
+          </div>
         </div>
+      </header>
+
+      {/* Main Content - Full Width */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <LocalErrorBoundary>
+          <SupervisorDashboard profile={safeProfile} session={session} />
+        </LocalErrorBoundary>
       </main>
     </div>
   );
