@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Navigate } from 'react-router-dom';
+import { useNavigate, Navigate, Link } from 'react-router-dom';
 import { supabase } from '../services/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -11,34 +11,22 @@ export default function Login() {
   const navigate = useNavigate();
   const { session } = useAuth();
 
-  // --- THIS IS THE FIX ---
-  // We use useEffect to handle the navigation side-effect.
-  // This hook will run AFTER the component renders and the session state is stable.
   useEffect(() => {
-    // If the user is already logged in, redirect them away from the login page.
     if (session) {
       navigate('/app', { replace: true });
     }
-  }, [session, navigate]); // It re-runs only when session or navigate changes.
-  // --- END OF FIX ---
+  }, [session, navigate]);
 
-const handleLogin = async (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    console.log('Login: Attempting to sign in...'); // <-- ADDED
     try {
       setLoading(true);
       setError(null);
       
-      console.log('Login: Calling supabase.auth.signInWithPassword...'); // <-- ADDED
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       
-      if (error) {
-        console.error('Login: signInWithPassword ERROR:', error.message); // <-- ADDED
-        throw error;
-      }
+      if (error) throw error;
       
-      console.log('Login: signInWithPassword SUCCESS.'); // <-- ADDED
-      // The onAuthStateChange listener in AuthContext will handle the redirect.
     } catch (error) {
       setError(error.message);
     } finally {
@@ -46,8 +34,6 @@ const handleLogin = async (e) => {
     }
   };
   
-  // While the useEffect handles the redirect, we can return null here to avoid
-  // briefly flashing the login form for an already-logged-in user.
   if (session) {
     return null; 
   }
@@ -55,7 +41,11 @@ const handleLogin = async (e) => {
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-50">
       <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
-        <h2 className="text-2xl font-bold text-center text-gray-900">Sign in to your account</h2>
+        <div className="text-center">
+          <i className="fas fa-gem text-4xl text-indigo-600 mb-3"></i>
+          <h2 className="text-2xl font-bold text-gray-900">Sign in to your account</h2>
+        </div>
+        
         <form className="space-y-6" onSubmit={handleLogin}>
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700">
@@ -93,6 +83,17 @@ const handleLogin = async (e) => {
             </div>
           </div>
 
+          <div className="flex items-center justify-between">
+            <div className="text-sm">
+              <Link
+                to="/reset-password"
+                className="font-medium text-blue-600 hover:text-blue-500"
+              >
+                Forgot your password?
+              </Link>
+            </div>
+          </div>
+
           {error && <p className="text-sm text-red-600">{error}</p>}
 
           <div>
@@ -109,4 +110,3 @@ const handleLogin = async (e) => {
     </div>
   );
 }
-
