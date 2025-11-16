@@ -15,6 +15,8 @@ import CleanerLayout from './layouts/CleanerLayout.jsx';
 import PublicHomePage from './pages/PublicHomePage.jsx';
 import PublicScanPage from './pages/PublicScanPage.jsx';
 import Login from './pages/Login.jsx';
+import PasswordReset from './pages/PasswordReset.jsx';
+import UpdatePassword from './pages/UpdatePassword.jsx';
 import ScanHandlerPage from './pages/ScanHandlerPage.jsx';
 import CleanerAreaView from './pages/CleanerAreaView.jsx';
 import SupervisorAreaView from './pages/SupervisorAreaView.jsx';
@@ -89,6 +91,8 @@ export default function App() {
       {/* Public routes */}
       <Route path="/" element={<PublicHomePage />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/reset-password" element={<PasswordReset />} />
+      <Route path="/update-password" element={<UpdatePassword />} />
       <Route path="/public-home" element={<PublicHomePage />} />
       <Route path="/public-scan/:areaId" element={<PublicScanPage />} />
       <Route path="/scan/:areaId" element={<ScanHandlerPage />} />
