@@ -3,7 +3,7 @@ import React, { useMemo } from 'react';
 import { supabase } from '../services/supabaseClient.js';
 import CleanerTasksPage from '../pages/CleanerTasksPage.jsx';
 
-// Inline error boundary so child errors show a friendly panel instead of crashing
+// Inline error boundary
 class LocalErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -29,10 +29,8 @@ class LocalErrorBoundary extends React.Component {
 }
 
 export default function CleanerLayout({ session, profile }) {
-  // Guard: App should prevent this, but be safe
   if (!session?.user) return null;
 
-  // Safe profile passed to children
   const safeProfile = useMemo(() => {
     const fallbackEmail = session?.user?.email ?? 'user@example.com';
     return {
@@ -44,30 +42,41 @@ export default function CleanerLayout({ session, profile }) {
     };
   }, [profile, session]);
 
-  const displayName = safeProfile.full_name;
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    window.location.href = '/';
+  };
 
   return (
     <div className="min-h-screen bg-gray-100">
+      {/* Top Header */}
       <header className="bg-green-700 text-white shadow-md sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto py-4 px-4 flex justify-between items-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
           <div className="flex items-center">
             <i className="fas fa-gem text-2xl mr-3" aria-hidden="true"></i>
-            <h1 className="text-xl font-semibold">PristinePoint</h1>
+            <div>
+              <h1 className="text-xl font-bold">PristinePoint</h1>
+              <p className="text-xs text-green-100">My Tasks</p>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-sm">{displayName}</span>
+          <div className="flex items-center gap-4">
+            <div className="text-right hidden sm:block">
+              <p className="text-sm font-medium">{safeProfile.full_name}</p>
+              <p className="text-xs text-green-100 capitalize">{safeProfile.role}</p>
+            </div>
             <button
-              onClick={() => supabase.auth.signOut()}
-              className="bg-red-500 hover:bg-red-600 px-3 py-1 rounded-md text-sm"
+              onClick={handleLogout}
+              className="flex items-center gap-2 bg-red-500 hover:bg-red-600 px-3 py-2 rounded-md text-sm transition-colors"
             >
-              Sign Out
+              <i className="fas fa-sign-out-alt"></i>
+              <span className="hidden sm:inline">Sign Out</span>
             </button>
           </div>
         </div>
       </header>
 
-      <main className="p-4">
-        {/* If profile hasn't arrived yet, show a tiny skeleton instead of crashing */}
+      {/* Main Content - Full Width */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {!safeProfile?.id ? (
           <div className="max-w-4xl mx-auto">
             <div className="animate-pulse space-y-3">
