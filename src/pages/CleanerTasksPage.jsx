@@ -15,6 +15,7 @@ export default function CleanerTasksPage({ profile }) {
       setError(null);
 
       // FIXED: Changed the select query to properly fetch job_templates
+      // FIXED: Removed 'in_progress' as it's not a valid enum value
       const { data, error } = await supabase
         .from('tasks')
         .select(`
@@ -35,7 +36,7 @@ export default function CleanerTasksPage({ profile }) {
           )
         `)
         .eq('assigned_to', profile.id)
-        .in('status', ['assigned', 'in_progress'])
+        .eq('status', 'assigned')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -135,10 +136,8 @@ export default function CleanerTasksPage({ profile }) {
                       </span>
                     </div>
                     <div className="mt-2">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        task.status === 'assigned' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'
-                      }`}>
-                        {task.status === 'assigned' ? 'Assigned' : 'In Progress'}
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                        Assigned
                       </span>
                     </div>
                   </div>
