@@ -1,99 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../services/supabaseClient.js';
+// Replace the AreaQRCodeModal component in src/pages/Sites.jsx
 
-// --- Modal for Editing an Area ---
-const AreaEditModal = ({ area, isOpen, onClose, onUpdateSuccess, profile, areaTypes }) => {
-    const [name, setName] = useState('');
-    const [areaTypeId, setAreaTypeId] = useState('');
-    const [dailyCleaningFrequency, setDailyCleaningFrequency] = useState(0);
-    const [error, setError] = useState(null);
-    const [loading, setLoading] = useState(false);
-
-    // Pre-fill the form when an area is selected
-    useEffect(() => {
-        if (area) {
-            setName(area.name || '');
-            setAreaTypeId(area.area_type_id || '');
-            setDailyCleaningFrequency(area.daily_cleaning_frequency || 0);
-            setError(null);
-        }
-    }, [area]);
-
-    if (!isOpen || !area) return null;
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setLoading(true);
-        setError(null);
-
-        const updatePayload = {
-            name: name,
-            area_type_id: areaTypeId || null,
-            daily_cleaning_frequency: dailyCleaningFrequency
-        };
-
-        const { error: updateError } = await supabase
-            .from('areas')
-            .update(updatePayload)
-            .eq('id', area.id);
-
-        setLoading(false);
-
-        if (updateError) {
-            setError(updateError.message);
-        } else {
-            onUpdateSuccess(); // This will trigger a re-fetch in the parent component
-            onClose();
-        }
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center">
-            <div className="bg-white rounded-lg shadow-xl max-w-md w-full m-4 z-50">
-                <form onSubmit={handleSubmit}>
-                    <div className="p-6">
-                        <h3 className="text-xl font-semibold mb-4">Edit Area</h3>
-                        <div className="space-y-4">
-                            <div>
-                                <label className="text-sm font-medium text-gray-700">Area Name</label>
-                                <input type="text" value={name} onChange={(e) => setName(e.target.value)} required className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm"/>
-                            </div>
-                            <div>
-                                <label className="text-sm font-medium text-gray-700">Area Type (Optional)</label>
-                                <select value={areaTypeId} onChange={(e) => setAreaTypeId(e.target.value)} className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm">
-                                    <option value="">None</option>
-                                    {areaTypes.map(type => (
-                                        <option key={type.id} value={type.id}>{type.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="text-sm font-medium text-gray-700">Cleanings Per Day</label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    value={dailyCleaningFrequency}
-                                    onChange={(e) => setDailyCleaningFrequency(parseInt(e.target.value, 10) || 0)}
-                                    className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm"
-                                />
-                                <p className="text-xs text-gray-500 mt-1">Number of automatic daily cleanings. Set to 0 for none.</p>
-                            </div>
-                            {error && <p className="text-red-600 text-sm">{error}</p>}
-                        </div>
-                    </div>
-                    <div className="flex justify-end p-4 bg-gray-50 rounded-b-lg">
-                        <button type="button" onClick={onClose} className="bg-gray-200 text-gray-700 py-2 px-4 rounded-md mr-2 hover:bg-gray-300">Cancel</button>
-                        <button type="submit" disabled={loading} className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50">
-                            {loading ? 'Saving...' : 'Save Changes'}
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
-};
-
-// --- QR Code Modal for a single Area ---
 const AreaQRCodeModal = ({ area, isOpen, onClose }) => {
     if (!isOpen || !area) return null;
 
@@ -104,20 +10,66 @@ const AreaQRCodeModal = ({ area, isOpen, onClose }) => {
             <style>
                 {`
                     @media print {
-                        body > *, .modal-overlay > *:not(.modal-content-printable) { display: none !important; }
-                        .modal-overlay { background: transparent !important; }
-                        .modal-content-printable { visibility: visible !important; position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; box-shadow: none; border: none; display: flex; justify-content: center; align-items: center; }
-                        .print-hidden { display: none !important; }
+                        /* Hide everything on the page */
+                        body * {
+                            visibility: hidden;
+                        }
+                        
+                        /* Show only the printable content */
+                        #qr-printable-area,
+                        #qr-printable-area * {
+                            visibility: visible;
+                        }
+                        
+                        /* Position the printable area at the top of the page */
+                        #qr-printable-area {
+                            position: absolute;
+                            left: 50%;
+                            top: 50%;
+                            transform: translate(-50%, -50%);
+                            width: auto;
+                            max-width: 100%;
+                        }
+                        
+                        /* Remove modal styling for print */
+                        .modal-backdrop {
+                            display: none;
+                        }
+                        
+                        /* Hide buttons during print */
+                        .no-print {
+                            display: none !important;
+                        }
+                        
+                        /* Ensure good print quality */
+                        #qr-printable-area {
+                            -webkit-print-color-adjust: exact;
+                            print-color-adjust: exact;
+                        }
                     }
                 `}
             </style>
-            <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center transition-opacity modal-overlay" onClick={onClose}>
-                <div className="bg-white rounded-lg shadow-xl max-w-sm w-full m-4 flex flex-col z-50 modal-content-printable" onClick={e => e.stopPropagation()}>
-                    <div className="flex justify-between items-center p-4 border-b print-hidden">
+            <div 
+                className="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center transition-opacity modal-backdrop" 
+                onClick={onClose}
+            >
+                <div 
+                    className="bg-white rounded-lg shadow-xl max-w-sm w-full m-4 flex flex-col z-50" 
+                    onClick={e => e.stopPropagation()}
+                >
+                    {/* Header - Hidden during print */}
+                    <div className="flex justify-between items-center p-4 border-b no-print">
                         <h3 className="text-xl font-semibold">QR Code for "{area.name}"</h3>
-                        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+                        <button 
+                            onClick={onClose} 
+                            className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+                        >
+                            &times;
+                        </button>
                     </div>
-                    <div className="p-6 flex flex-col items-center" id="printable-qr-code">
+                    
+                    {/* Printable Content */}
+                    <div id="qr-printable-area" className="p-6 flex flex-col items-center">
                         <div className="text-center mb-4">
                             <h2 className="text-2xl font-bold">{area.name}</h2>
                             <p className="text-lg text-gray-600">Zone: {area.zoneName}</p>
@@ -130,235 +82,24 @@ const AreaQRCodeModal = ({ area, isOpen, onClose }) => {
                         />
                         <p className="mt-2 text-xs text-gray-500">ID: {area.id}</p>
                     </div>
-                    <div className="flex justify-end p-4 border-t print-hidden">
-                        <button onClick={onClose} className="bg-gray-200 text-gray-700 py-2 px-4 rounded-md mr-2 hover:bg-gray-300">Close</button>
-                        <button onClick={handlePrint} className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700">Print</button>
+                    
+                    {/* Footer - Hidden during print */}
+                    <div className="flex justify-end p-4 border-t no-print">
+                        <button 
+                            onClick={onClose} 
+                            className="bg-gray-200 text-gray-700 py-2 px-4 rounded-md mr-2 hover:bg-gray-300"
+                        >
+                            Close
+                        </button>
+                        <button 
+                            onClick={handlePrint} 
+                            className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700"
+                        >
+                            Print
+                        </button>
                     </div>
                 </div>
             </div>
         </>
     );
 };
-
-
-// --- Main Page Component ---
-export default function SitesPage({ profile }) {
-    const [sites, setSites] = useState([]);
-    const [areaTypes, setAreaTypes] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    
-    // State for create forms
-    const [newSiteName, setNewSiteName] = useState('');
-    const [newZoneName, setNewZoneName] = useState('');
-    const [newAreaName, setNewAreaName] = useState('');
-    const [selectedAreaTypeId, setSelectedAreaTypeId] = useState('');
-
-    // State for showing create forms conditionally
-    const [activeSiteId, setActiveSiteId] = useState(null);
-    const [activeZoneId, setActiveZoneId] = useState(null);
-
-    // State for modals
-    const [editingArea, setEditingArea] = useState(null);
-    const [qrModalArea, setQrModalArea] = useState(null);
-
-    // Fetch all site data for the company
-    const fetchFullHierarchy = useCallback(async () => {
-        if (!profile) return;
-        try {
-            setLoading(true);
-            const { data, error } = await supabase
-                .from('sites')
-                .select('*, zones(*, areas(*, area_types(id, name)))')
-                .eq('company_id', profile.company_id)
-                .order('name', { ascending: true }) // Order sites
-                .order('name', { foreignTable: 'zones', ascending: true }) // Order zones
-                .order('name', { foreignTable: 'zones.areas', ascending: true }); // Order areas
-
-            if (error) throw error;
-            setSites(data || []);
-
-            const { data: typesData, error: typesError } = await supabase
-                .from('area_types')
-                .select('*')
-                .eq('company_id', profile.company_id);
-
-            if (typesError) throw typesError;
-            setAreaTypes(typesData || []);
-
-        } catch (err) {
-            setError(err.message);
-        } finally {
-            setLoading(false);
-        }
-    }, [profile]);
-
-    useEffect(() => {
-        fetchFullHierarchy();
-    }, [fetchFullHierarchy]);
-
-    const handleCreate = async (e, type) => {
-        e.preventDefault();
-        setError(null);
-        let result;
-        if (type === 'site') {
-            result = await supabase.from('sites').insert({ name: newSiteName, company_id: profile.company_id });
-            setNewSiteName('');
-        } else if (type === 'zone') {
-            result = await supabase.from('zones').insert({ name: newZoneName, site_id: activeSiteId, company_id: profile.company_id });
-            setNewZoneName('');
-        } else if (type === 'area') {
-            result = await supabase.from('areas').insert({ name: newAreaName, zone_id: activeZoneId, company_id: profile.company_id, area_type_id: selectedAreaTypeId || null });
-            setNewAreaName('');
-            setSelectedAreaTypeId('');
-        }
-        
-        if (result.error) {
-            setError(result.error.message);
-        } else {
-            setActiveSiteId(null);
-            setActiveZoneId(null);
-            fetchFullHierarchy(); // Re-fetch all data on success
-        }
-    };
-    
-    const handleDelete = async (type, id) => {
-        // A simple confirm dialog is used here. In a real app, you might use a styled modal.
-        if (!confirm(`Are you sure you want to delete this ${type}? This action cannot be undone.`)) return;
-        
-        setError(null);
-        let result;
-        if (type === 'site') result = await supabase.from('sites').delete().eq('id', id);
-        else if (type === 'zone') result = await supabase.from('zones').delete().eq('id', id);
-        else if (type === 'area') result = await supabase.from('areas').delete().eq('id', id);
-        
-        if (result.error) setError(result.error.message);
-        else fetchFullHierarchy(); // Re-fetch all data on success
-    };
-
-    if (loading) return <p>Loading sites...</p>;
-    if (error) return <p className="text-red-600">Error: {error}</p>;
-
-    return (
-        <>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-md">
-                    <h3 className="text-xl font-semibold text-gray-800 mb-4">Sites, Zones & Areas</h3>
-                    <div className="space-y-4">
-                        {sites.map(site => (
-                            <div key={site.id} className="border rounded-lg">
-                                <div className="w-full flex justify-between items-center p-4 bg-gray-50">
-                                    <span className="font-semibold text-lg text-gray-700">{site.name}</span>
-                                    <div>
-                                        <button onClick={() => { setActiveSiteId(site.id); setActiveZoneId(null); }} className="text-sm bg-blue-500 hover:bg-blue-600 text-white py-1 px-3 rounded-md mr-2">Add Zone</button>
-                                        <button onClick={() => handleDelete('site', site.id)} className="text-sm bg-red-500 hover:bg-red-600 text-white py-1 px-3 rounded-md">Delete Site</button>
-                                    </div>
-                                </div>
-                                <div className="bg-white p-4 border-t space-y-2">
-                                    {(site.zones || []).map(zone => (
-                                        <div key={zone.id} className="border rounded-md">
-                                             <div className="w-full flex justify-between items-center p-3 bg-gray-100">
-                                                <span className="font-medium text-gray-700">{zone.name}</span>
-                                                <div>
-                                                    <button onClick={() => { setActiveSiteId(site.id); setActiveZoneId(zone.id); }} className="text-xs bg-green-500 hover:bg-green-600 text-white py-1 px-2 rounded-md mr-2">Add Area</button>
-                                                    <button onClick={() => handleDelete('zone', zone.id)} className="text-xs bg-red-500 hover:bg-red-600 text-white py-1 px-2 rounded-md">Delete Zone</button>
-                                                </div>
-                                             </div>
-                                             <div className="p-3">
-                                                {(zone.areas || []).length > 0 ? (
-                                                    <ul className="space-y-1">
-                                                        {(zone.areas).map(area => (
-                                                            <li key={area.id} className="flex justify-between items-center text-sm p-1 hover:bg-gray-50 rounded-md">
-                                                                <div>
-                                                                    <span>{area.name}</span>
-                                                                    {area.area_types && <span className="ml-2 text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">{area.area_types.name}</span>}
-                                                                    {area.daily_cleaning_frequency > 0 && 
-                                                                        <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
-                                                                            {area.daily_cleaning_frequency}x Daily
-                                                                        </span>
-                                                                    }
-                                                                </div>
-                                                                <div className="flex items-center">
-                                                                    <button onClick={() => setQrModalArea({ ...area, zoneName: zone.name, siteName: site.name })} className="text-xs font-semibold text-purple-600 hover:underline mr-3">QR</button>
-                                                                    <button onClick={() => setEditingArea(area)} className="text-xs text-blue-600 hover:underline mr-3">Edit</button>
-                                                                    <button onClick={() => handleDelete('area', area.id)} className="text-xs text-red-500 hover:text-red-700">Delete</button>
-                                                                </div>
-                                                            </li>
-                                                        ))}
-                                                    </ul>
-                                                ) : <p className="text-xs text-gray-500">No areas in this zone.</p>}
-                                             </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-                <div>
-                    <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-                        <h3 className="text-xl font-semibold text-gray-800 mb-4">Create New Site</h3>
-                        <form onSubmit={(e) => handleCreate(e, 'site')} className="space-y-4">
-                            <div>
-                                <label className="text-sm font-medium text-gray-700">Site Name</label>
-                                <input type="text" value={newSiteName} onChange={e => setNewSiteName(e.target.value)} required className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm" />
-                            </div>
-                            <button type="submit" className="w-full py-2 px-4 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700">Create Site</button>
-                        </form>
-                    </div>
-                    {activeSiteId && !activeZoneId && (
-                        <div className="bg-white p-6 rounded-lg shadow-md">
-                            <h3 className="text-xl font-semibold text-gray-800 mb-4">Add Zone to {sites.find(s => s.id === activeSiteId)?.name}</h3>
-                            <form onSubmit={(e) => handleCreate(e, 'zone')} className="space-y-4">
-                                <div>
-                                    <label className="text-sm font-medium text-gray-700">Zone Name</label>
-                                    <input type="text" value={newZoneName} onChange={e => setNewZoneName(e.target.value)} required className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm" />
-                                </div>
-                                <button type="submit" className="w-full py-2 px-4 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Add Zone</button>
-                                <button type="button" onClick={() => setActiveSiteId(null)} className="w-full py-2 px-4 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 mt-2">Cancel</button>
-                            </form>
-                        </div>
-                    )}
-                    {activeZoneId && (
-                        <div className="bg-white p-6 rounded-lg shadow-md">
-                            <h3 className="text-xl font-semibold text-gray-800 mb-4">Add Area to Zone</h3>
-                            <form onSubmit={(e) => handleCreate(e, 'area')} className="space-y-4">
-                                <div>
-                                    <label className="text-sm font-medium text-gray-700">Area Name</label>
-                                    <input type="text" value={newAreaName} onChange={e => setNewAreaName(e.target.value)} required className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm" />
-                                </div>
-                                <div>
-                                    <label className="text-sm font-medium text-gray-700">Area Type (Optional)</label>
-                                    <select value={selectedAreaTypeId} onChange={e => setSelectedAreaTypeId(e.target.value)} className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm">
-                                        <option value="">None</option>
-                                        {areaTypes.map(type => (
-                                            <option key={type.id} value={type.id}>{type.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <button type="submit" className="w-full py-2 px-4 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700">Add Area</button>
-                                <button type="button" onClick={() => { setActiveZoneId(null); setActiveSiteId(null); }} className="w-full py-2 px-4 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 mt-2">Cancel</button>
-                            </form>
-                        </div>
-                    )}
-                </div>
-            </div>
-            
-            <AreaEditModal
-                area={editingArea}
-                isOpen={!!editingArea}
-                onClose={() => setEditingArea(null)}
-                onUpdateSuccess={fetchFullHierarchy}
-                profile={profile}
-                areaTypes={areaTypes}
-            />
-
-            <AreaQRCodeModal
-                area={qrModalArea}
-                isOpen={!!qrModalArea}
-                onClose={() => setQrModalArea(null)}
-            />
-        </>
-    );
-}
-
