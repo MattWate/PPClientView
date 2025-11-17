@@ -14,14 +14,16 @@ export default function CleanerTasksPage({ profile }) {
       setLoading(true);
       setError(null);
 
-      // Fetch all assigned tasks for this cleaner
+      // FIXED: Changed the select query to properly fetch job_templates
       const { data, error } = await supabase
         .from('tasks')
         .select(`
           id,
-          title,
           status,
           created_at,
+          job_templates (
+            description
+          ),
           areas (
             name,
             zones (
@@ -105,6 +107,8 @@ export default function CleanerTasksPage({ profile }) {
             const siteName = task.areas?.zones?.sites?.name || 'Unknown Site';
             const zoneName = task.areas?.zones?.name || 'Unknown Zone';
             const areaName = task.areas?.name || 'Unknown Area';
+            // FIXED: Get description from job_templates instead of title
+            const taskDescription = task.job_templates?.description || 'Unnamed Task';
             const isCompleting = completingTaskId === task.id;
 
             return (
@@ -112,7 +116,7 @@ export default function CleanerTasksPage({ profile }) {
                 <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                   <div className="flex-1">
                     <h3 className="font-semibold text-lg text-gray-900 mb-2">
-                      {task.title}
+                      {taskDescription}
                     </h3>
                     <div className="flex flex-wrap gap-2 text-sm text-gray-600">
                       <span className="flex items-center">
