@@ -21,26 +21,35 @@ import ScanHandlerPage from './pages/ScanHandlerPage.jsx';
 import CleanerAreaView from './pages/CleanerAreaView.jsx';
 import SupervisorAreaView from './pages/SupervisorAreaView.jsx';
 import SiteReportPage from './pages/SiteReportPage.jsx';
+import StaffReportPage from './pages/StaffReportPage.jsx';
 
 // Small UI helpers
 const LoadingScreen = () => (
   <div className="flex items-center justify-center h-screen bg-gray-100">
-    <p className="text-gray-600">Loading...</p>
+    <div className="text-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+      <p className="text-gray-600">Loading...</p>
+    </div>
   </div>
 );
 
 const ProfileNotFound = ({ onSignOut }) => (
   <div className="flex flex-col items-center justify-center h-screen bg-gray-100 p-4 text-center">
-    <h2 className="text-2xl font-bold text-red-600 mb-2">Profile Not Found</h2>
-    <p className="text-gray-700 mb-4">
-      Your user profile could not be loaded. Please sign out and try again.
-    </p>
-    <button
-      onClick={onSignOut}
-      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
-    >
-      Sign Out
-    </button>
+    <div className="bg-white p-8 rounded-lg shadow-md max-w-md">
+      <div className="bg-red-100 rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+        <i className="fas fa-user-slash text-red-600 text-2xl"></i>
+      </div>
+      <h2 className="text-2xl font-bold text-red-600 mb-2">Profile Not Found</h2>
+      <p className="text-gray-700 mb-6">
+        Your user profile could not be loaded. This may happen if your account setup is incomplete.
+      </p>
+      <button
+        onClick={onSignOut}
+        className="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+      >
+        Sign Out & Try Again
+      </button>
+    </div>
   </div>
 );
 
@@ -53,7 +62,7 @@ function RequireAuth({ children }) {
   return children;
 }
 
-// This component now just routes based on role - NO fetching!
+// This component routes based on role
 function AppLayout() {
   const { session, profile } = useAuth();
 
@@ -114,9 +123,15 @@ export default function App() {
         path="/supervisor-view/:areaId" 
         element={<RequireAuth><SupervisorAreaView /></RequireAuth>} 
       />
+      
+      {/* Report Routes - Protected */}
       <Route 
         path="/report/site" 
         element={<RequireAuth><SiteReportPage /></RequireAuth>} 
+      />
+      <Route 
+        path="/report/staff" 
+        element={<RequireAuth><StaffReportPage /></RequireAuth>} 
       />
       
       {/* Fallback redirect */}
