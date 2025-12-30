@@ -21,7 +21,8 @@ import ScanHandlerPage from './pages/ScanHandlerPage.jsx';
 import CleanerAreaView from './pages/CleanerAreaView.jsx';
 import SupervisorAreaView from './pages/SupervisorAreaView.jsx';
 import SiteReportPage from './pages/SiteReportPage.jsx';
-import StaffReportPage from './pages/StaffReportPage.jsx';
+// FIXED: Changed import to match the actual filename 'StaffReport.jsx'
+import StaffReportPage from './pages/StaffReport.jsx';
 
 // Small UI helpers
 const LoadingScreen = () => (
