@@ -56,8 +56,6 @@ const TaskManagementModal = ({
       setScheduledJobs(data || []);
     } catch (err) {
       console.error('Error fetching scheduled jobs:', err);
-    } finally {
-      setLoadingJobs(false);
     }
   };
 
@@ -69,7 +67,7 @@ const TaskManagementModal = ({
   const tasksToGenerateCount = Math.max(0, requiredTasks - generatedToday);
   const pendingTasks = (area.tasks || []).filter(t => t.status === 'pending');
 
-  // 1. Run a specific Scheduled Job (The Bridge)
+  // 1. Run a specific Scheduled Job
   const handleRunScheduledJob = async (job) => {
     setIsSubmitting(true);
     setError('');
@@ -78,7 +76,7 @@ const TaskManagementModal = ({
     try {
       const { error: insertError } = await supabase.from('tasks').insert({
         title: job.title,
-        description: `Scheduled Task: ${job.cron_schedule}`, // Simplified description
+        description: `Scheduled Task: ${job.cron_schedule}`,
         company_id: area.company_id,
         area_id: area.id,
         zone_id: area.zone_id ?? null,
@@ -86,14 +84,13 @@ const TaskManagementModal = ({
         created_by: profile?.id ?? null,
         status: 'pending',
         task_type: 'scheduled',
-        scheduled_job_id: job.id // Optional: link back if schema supports it
+        scheduled_job_id: job.id
       });
 
       if (insertError) throw insertError;
 
       setSuccessMsg(`Launched: ${job.title}`);
       onUpdate();
-      // We don't close immediately so they can launch others if needed
     } catch (e) {
       console.error(e);
       setError('Failed to launch scheduled job.');
@@ -102,7 +99,7 @@ const TaskManagementModal = ({
     }
   };
 
-  // 2. Generate Generic Daily Tasks (Fallback)
+  // 2. Generate Generic Daily Tasks
   const handleGenerateGenericTasks = async () => {
     if (tasksToGenerateCount <= 0) return;
     setIsSubmitting(true); setError('');
@@ -206,7 +203,7 @@ const TaskManagementModal = ({
 
         <div className="p-6 space-y-8">
           
-          {/* SECTION 1: SCHEDULED JOBS (The "Close the Loop" feature) */}
+          {/* SECTION 1: SCHEDULED JOBS */}
           <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
             <h4 className="font-semibold text-lg text-indigo-900 mb-3 flex items-center gap-2">
               <i className="fas fa-calendar-alt"></i> Scheduled Jobs
@@ -236,7 +233,6 @@ const TaskManagementModal = ({
               <p className="text-sm text-gray-500 italic">No scheduled jobs defined for this area.</p>
             )}
 
-            {/* Fallback to Generic Generation if needed */}
             <div className="mt-4 pt-4 border-t border-indigo-200">
                <div className="flex justify-between items-center">
                   <span className="text-sm text-indigo-800">
@@ -263,10 +259,29 @@ const TaskManagementModal = ({
                 No cleaners are assigned to this zone. Go to Assignments to add cleaners.
               </p>
             )}
+            
             {pendingTasks.length > 0 ? (
               <div className="space-y-4">
-                <p>Assign all <b>{pendingTasks.length}</b> pending task(s) to a cleaner:</p>
-                <div className="flex gap-2">
+                <div className="bg-amber-50 border border-amber-100 rounded-md p-3">
+                    <p className="text-sm font-semibold text-amber-800 mb-2">Pending Tasks Review:</p>
+                    <ul className="space-y-2 max-h-48 overflow-y-auto">
+                        {pendingTasks.map(task => (
+                            <li key={task.id} className="bg-white p-2 rounded shadow-sm border border-gray-100">
+                                <div className="flex justify-between items-start">
+                                    <span className="font-medium text-gray-800 text-sm">{task.title}</span>
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase ${task.task_type === 'ad_hoc' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                                        {task.task_type?.replace('_', ' ')}
+                                    </span>
+                                </div>
+                                {task.description && (
+                                    <p className="text-xs text-gray-500 mt-1 whitespace-pre-wrap">{task.description}</p>
+                                )}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+
+                <div className="flex gap-2 items-center">
                   <select 
                     value={assigneeId} 
                     onChange={e => setAssigneeId(e.target.value)} 
@@ -278,9 +293,9 @@ const TaskManagementModal = ({
                   <button 
                     onClick={handleAssignPendingTasks} 
                     disabled={isSubmitting || !assigneeId} 
-                    className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                    className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
                   >
-                    Assign
+                    Assign Batch
                   </button>
                 </div>
               </div>
@@ -342,6 +357,9 @@ export default function SupervisorDashboard({ profile }) {
   const [error, setError] = useState(null);
   
   const [selectedAreaId, setSelectedAreaId] = useState(null);
+  
+  // Collapse State
+  const [collapsedZones, setCollapsedZones] = useState(new Set());
 
   const fetchData = useCallback(async () => {
     if (!profile?.id || !profile?.company_id) {
@@ -384,7 +402,7 @@ export default function SupervisorDashboard({ profile }) {
       const end = startOfTomorrow().toISOString();
       const { data: tasksData, error: tasksError } = await supabase
         .from('tasks')
-        .select('id, title, status, area_id, assigned_to, task_type, created_at, zone_id, profiles:assigned_to(full_name)')
+        .select('id, title, description, status, area_id, assigned_to, task_type, created_at, zone_id, profiles:assigned_to(full_name)')
         .in('zone_id', zoneIds)
         .gte('created_at', start)
         .lt('created_at', end);
@@ -461,6 +479,23 @@ export default function SupervisorDashboard({ profile }) {
     fetchData(); 
   }, [fetchData]);
 
+  // Collapse Handlers
+  const toggleZone = (zoneId) => {
+    setCollapsedZones(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(zoneId)) newSet.delete(zoneId);
+      else newSet.add(zoneId);
+      return newSet;
+    });
+  };
+
+  const expandAll = () => setCollapsedZones(new Set());
+  
+  const collapseAll = () => {
+    const allZoneIds = zones.map(z => z.id);
+    setCollapsedZones(new Set(allZoneIds));
+  };
+
   const selectedArea = selectedAreaId 
     ? zones.flatMap(z => z.areas || []).find(a => a.id === selectedAreaId) 
     : null;
@@ -488,88 +523,149 @@ export default function SupervisorDashboard({ profile }) {
 
   return (
     <>
-      <div className="space-y-6">
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Task Assignment Dashboard</h2>
-          <p className="text-gray-600">Manage daily task generation and assignments for your zones</p>
-        </div>
+      <div className="flex gap-6 h-[calc(100vh-100px)]">
+        
+        {/* STICKY SIDEBAR */}
+        <div className="w-80 flex-shrink-0">
+          <div className="sticky top-6 space-y-4">
+            
+            {/* Dashboard Header/Stats */}
+            <div className="bg-white p-4 rounded-lg shadow-md border-t-4 border-indigo-600">
+              <h2 className="text-xl font-bold text-gray-800 mb-1">Supervisor</h2>
+              <p className="text-sm text-gray-600 mb-4">Task Assignment Dashboard</p>
+              
+              <div className="text-sm space-y-2 pt-4 border-t">
+                <div className="flex justify-between">
+                    <span className="text-gray-500">Zones:</span>
+                    <span className="font-medium">{zones.length}</span>
+                </div>
+                 <div className="flex justify-between">
+                    <span className="text-gray-500">Total Areas:</span>
+                    <span className="font-medium">{zones.reduce((acc, z) => acc + (z.areas?.length || 0), 0)}</span>
+                </div>
+              </div>
+            </div>
 
-        {zones.map(zone => (
-          <div key={zone.id} className="bg-white p-6 rounded-lg shadow-md border">
-            <div className="mb-4 pb-4 border-b">
-              <h3 className="text-xl font-semibold text-gray-800">{zone.name}</h3>
-              <p className="text-sm text-gray-500">Site: {zone?.sites?.name || '—'}</p>
+            {/* View Controls */}
+            <div className="bg-white p-4 rounded-lg shadow-md">
+              <h3 className="font-semibold text-gray-700 mb-3 text-sm uppercase tracking-wide">View Controls</h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={expandAll}
+                  className="flex-1 bg-gray-50 text-gray-700 py-2 px-3 rounded-md hover:bg-gray-100 text-sm font-medium border border-gray-200"
+                >
+                  <i className="fas fa-expand-arrows-alt mr-1"></i>
+                  Expand All
+                </button>
+                <button
+                  onClick={collapseAll}
+                  className="flex-1 bg-gray-50 text-gray-700 py-2 px-3 rounded-md hover:bg-gray-100 text-sm font-medium border border-gray-200"
+                >
+                  <i className="fas fa-compress-arrows-alt mr-1"></i>
+                  Collapse All
+                </button>
+              </div>
             </div>
             
-            <div className="space-y-4">
-              {(zone.areas || []).length === 0 ? (
-                <p className="text-gray-500 text-center py-4">No areas in this zone</p>
-              ) : (
-                (zone.areas || []).map(area => {
-                  const assignedTasks = area.tasks.filter(t => t.status === 'assigned');
-                  const pendingTasks = area.tasks.filter(t => t.status === 'pending');
-                  return (
-                    <div key={area.id} className="border rounded-md p-4 bg-gray-50">
-                      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className="font-semibold text-gray-800">{area.name}</p>
-                            {pendingTasks.length > 0 && (
-                                <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold">
-                                    {pendingTasks.length} Pending
-                                </span>
-                            )}
-                          </div>
-                          <div className="mt-1 flex flex-wrap gap-2 text-xs">
-                            <span className="bg-green-100 text-green-800 px-2 py-1 rounded">
-                              Generated Today: <b>{area.scheduledTodayCount}</b>
-                            </span>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => setSelectedAreaId(area.id)}
-                          className="bg-blue-600 text-white py-2 px-4 text-sm rounded-md hover:bg-blue-700 whitespace-nowrap shadow-sm"
-                        >
-                          Manage Tasks
-                        </button>
-                      </div>
-                      
-                      <div className="mt-4 pt-4 border-t">
-                        <h5 className="text-xs font-bold text-gray-500 uppercase mb-2">Active Tasks</h5>
-                        {area.tasks.length > 0 ? (
-                          <ul className="space-y-1">
-                            {area.tasks.map(task => (
-                              <li key={task.id} className="text-sm text-gray-700 flex justify-between items-center bg-white p-2 rounded border border-gray-100">
-                                <span>{task.title}</span>
-                                <div className="flex items-center gap-2">
-                                    <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                        task.status === 'completed' ? 'bg-green-100 text-green-800' :
-                                        task.status === 'verified' ? 'bg-blue-100 text-blue-800' :
-                                        task.status === 'assigned' ? 'bg-indigo-100 text-indigo-800' :
-                                        'bg-gray-100 text-gray-600'
-                                    }`}>
-                                        {task.status}
-                                    </span>
-                                    {task.profiles && (
-                                        <span className="text-xs font-semibold text-gray-600">
-                                            {task.profiles.full_name}
+          </div>
+        </div>
+
+        {/* MAIN SCROLLABLE CONTENT */}
+        <div className="flex-1 overflow-y-auto pr-2">
+            {zones.map(zone => (
+            <div key={zone.id} className="bg-white rounded-lg shadow-md border border-gray-200 mb-6 overflow-hidden">
+                {/* Zone Header (Collapsible) */}
+                <div 
+                    onClick={() => toggleZone(zone.id)}
+                    className="p-4 bg-gray-50 border-b border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors flex justify-between items-center"
+                >
+                    <div>
+                        <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                            <i className={`fas fa-chevron-${collapsedZones.has(zone.id) ? 'right' : 'down'} text-gray-400 text-sm transition-transform`}></i>
+                            {zone.name}
+                        </h3>
+                        <p className="text-sm text-gray-500 ml-6">Site: {zone?.sites?.name || '—'}</p>
+                    </div>
+                    <span className="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded-full">
+                        {zone.areas?.length || 0} Areas
+                    </span>
+                </div>
+                
+                {/* Zone Content */}
+                {!collapsedZones.has(zone.id) && (
+                <div className="p-4 space-y-4 bg-white">
+                {(zone.areas || []).length === 0 ? (
+                    <p className="text-gray-500 text-center py-4 italic">No areas defined in this zone.</p>
+                ) : (
+                    (zone.areas || []).map(area => {
+                    const pendingTasks = area.tasks.filter(t => t.status === 'pending');
+                    const hasPending = pendingTasks.length > 0;
+                    
+                    return (
+                        <div key={area.id} className={`border rounded-md p-4 transition-all ${hasPending ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-200 hover:border-blue-300'}`}>
+                        <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
+                            <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <p className="font-bold text-gray-800 text-lg">{area.name}</p>
+                                    {hasPending && (
+                                        <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                                            <i className="fas fa-exclamation-circle"></i>
+                                            {pendingTasks.length} Pending
                                         </span>
                                     )}
                                 </div>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="text-xs text-gray-500 italic">No tasks active today.</p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
+                                <div className="flex flex-wrap gap-2 text-xs">
+                                    <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded">
+                                        Req: <b>{area.required}</b>
+                                    </span>
+                                    <span className={`px-2 py-1 rounded border ${area.remaining > 0 ? 'bg-orange-50 text-orange-700 border-orange-100' : 'bg-green-50 text-green-700 border-green-100'}`}>
+                                        Generated: <b>{area.scheduledTodayCount}</b>
+                                    </span>
+                                </div>
+                            </div>
+                            <button
+                            onClick={() => setSelectedAreaId(area.id)}
+                            className="bg-indigo-600 text-white py-2 px-4 text-sm rounded-md hover:bg-indigo-700 whitespace-nowrap shadow-sm flex items-center gap-2"
+                            >
+                            <i className="fas fa-tasks"></i>
+                            Manage Tasks
+                            </button>
+                        </div>
+                        
+                        {/* Task Mini-List */}
+                        <div className="mt-4 pt-3 border-t border-dashed border-gray-300">
+                            <h5 className="text-[10px] font-bold text-gray-400 uppercase mb-2 tracking-wider">Active Tasks Today</h5>
+                            {area.tasks.length > 0 ? (
+                            <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                {area.tasks.map(task => (
+                                <li key={task.id} className="text-sm text-gray-700 flex justify-between items-center bg-white p-2 rounded border border-gray-100 shadow-sm">
+                                    <span className="truncate mr-2 font-medium" title={task.title}>{task.title}</span>
+                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                        <span className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-semibold ${
+                                            task.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                            task.status === 'verified' ? 'bg-blue-100 text-blue-800' :
+                                            task.status === 'assigned' ? 'bg-indigo-100 text-indigo-800' :
+                                            'bg-gray-100 text-gray-600'
+                                        }`}>
+                                            {task.status}
+                                        </span>
+                                    </div>
+                                </li>
+                                ))}
+                            </ul>
+                            ) : (
+                            <p className="text-xs text-gray-400 italic">No tasks currently active.</p>
+                            )}
+                        </div>
+                        </div>
+                    );
+                    })
+                )}
+                </div>
+                )}
             </div>
-          </div>
-        ))}
+            ))}
+        </div>
       </div>
       
       <TaskManagementModal
