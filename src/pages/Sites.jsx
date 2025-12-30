@@ -100,7 +100,8 @@ export default function Sites({ profile }) {
     setCollapsedZones(new Set(allZoneIds));
   };
 
-  // Creation Handlers
+  // --- MISSING HANDLERS ADDED BELOW ---
+
   const handleAddSite = async (e) => {
     e.preventDefault();
     try {
@@ -169,8 +170,6 @@ export default function Sites({ profile }) {
 
   // QR Code Logic
   const handleShowQRCode = (area, zoneName, siteName) => {
-    // Construct the URL that leads to the PublicScanPage
-    // Using hash router format (#/public-scan/...)
     const baseUrl = window.location.origin; 
     const url = `${baseUrl}/#/public-scan/${area.id}`;
     
@@ -458,7 +457,7 @@ export default function Sites({ profile }) {
                 <p className="text-sm text-gray-500 mb-4">{qrData.areaName}</p>
             </div>
             
-            {/* Printable Area - Designed to look like a sticker */}
+            {/* Printable Area */}
             <div className="print-area bg-white p-4 border-2 border-dashed border-gray-300 inline-block rounded-lg mb-4 w-full">
                 <div className="flex flex-col items-center">
                     <p className="text-sm font-bold mb-2 uppercase tracking-wider text-gray-700">Scan to Clean / Report</p>
