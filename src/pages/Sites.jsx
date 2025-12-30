@@ -1,24 +1,80 @@
-// src/pages/Sites.jsx - Updated with sticky sidebar and collapsible sections
-
+// src/pages/Sites.jsx
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
+import QRCode from 'react-qr-code';
 
 export default function Sites({ profile }) {
   const [sites, setSites] = useState([]);
   const [areaTypes, setAreaTypes] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  // Collapse State
   const [collapsedSites, setCollapsedSites] = useState(new Set());
   const [collapsedZones, setCollapsedZones] = useState(new Set());
+
+  // Selection State for adding new items
+  const [selectedSite, setSelectedSite] = useState(null);
+  const [selectedZone, setSelectedZone] = useState(null);
+
+  // Form State
+  const [newSite, setNewSite] = useState({ name: '', address: '' });
+  const [newZone, setNewZone] = useState({ name: '' });
+  const [newArea, setNewArea] = useState({ name: '', area_type_id: '', daily_cleaning_frequency: 1 });
+
+  // QR Code State
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [qrData, setQrData] = useState({ areaId: '', areaName: '', url: '' });
+
+  const fetchData = async () => {
+    if (!profile?.company_id) return;
+    try {
+      setLoading(true);
+      
+      // Fetch Sites with Zones and Areas
+      const { data: sitesData, error: sitesError } = await supabase
+        .from('sites')
+        .select(`
+          id, name, address,
+          zones (
+            id, name,
+            areas (
+              id, name, daily_cleaning_frequency,
+              area_types (id, name)
+            )
+          )
+        `)
+        .eq('company_id', profile.company_id)
+        .order('name');
+
+      if (sitesError) throw sitesError;
+      setSites(sitesData || []);
+
+      // Fetch Area Types for dropdown
+      const { data: typesData, error: typesError } = await supabase
+        .from('area_types')
+        .select('id, name')
+        .eq('company_id', profile.company_id);
+      
+      if (typesError) throw typesError;
+      setAreaTypes(typesData || []);
+
+    } catch (error) {
+      console.error('Error loading sites:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [profile?.company_id]);
 
   // Toggle functions
   const toggleSite = (siteId) => {
     setCollapsedSites(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(siteId)) {
-        newSet.delete(siteId);
-      } else {
-        newSet.add(siteId);
-      }
+      if (newSet.has(siteId)) newSet.delete(siteId);
+      else newSet.add(siteId);
       return newSet;
     });
   };
@@ -26,16 +82,12 @@ export default function Sites({ profile }) {
   const toggleZone = (zoneId) => {
     setCollapsedZones(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(zoneId)) {
-        newSet.delete(zoneId);
-      } else {
-        newSet.add(zoneId);
-      }
+      if (newSet.has(zoneId)) newSet.delete(zoneId);
+      else newSet.add(zoneId);
       return newSet;
     });
   };
 
-  // Expand/Collapse All
   const expandAll = () => {
     setCollapsedSites(new Set());
     setCollapsedZones(new Set());
@@ -48,20 +100,93 @@ export default function Sites({ profile }) {
     setCollapsedZones(new Set(allZoneIds));
   };
 
-  // Your existing fetch functions...
-  const fetchData = async () => {
-    // ... existing code
+  // Creation Handlers
+  const handleAddSite = async (e) => {
+    e.preventDefault();
+    try {
+      const { error } = await supabase
+        .from('sites')
+        .insert({
+          company_id: profile.company_id,
+          name: newSite.name,
+          address: newSite.address
+        });
+      if (error) throw error;
+      setNewSite({ name: '', address: '' });
+      fetchData();
+    } catch (error) {
+      alert('Error adding site: ' + error.message);
+    }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [profile?.company_id]);
+  const handleAddZone = async (e) => {
+    e.preventDefault();
+    if (!selectedSite) return;
+    try {
+      const { error } = await supabase
+        .from('zones')
+        .insert({
+          company_id: profile.company_id,
+          site_id: selectedSite,
+          name: newZone.name
+        });
+      if (error) throw error;
+      setNewZone({ name: '' });
+      fetchData();
+    } catch (error) {
+      alert('Error adding zone: ' + error.message);
+    }
+  };
+
+  const handleAddArea = async (e) => {
+    e.preventDefault();
+    if (!selectedZone) return;
+    try {
+      const { error } = await supabase
+        .from('areas')
+        .insert({
+          company_id: profile.company_id,
+          zone_id: selectedZone,
+          name: newArea.name,
+          area_type_id: newArea.area_type_id || null,
+          daily_cleaning_frequency: newArea.daily_cleaning_frequency
+        });
+      if (error) throw error;
+      setNewArea({ name: '', area_type_id: '', daily_cleaning_frequency: 1 });
+      fetchData();
+    } catch (error) {
+      alert('Error adding area: ' + error.message);
+    }
+  };
+
+  const getZoneName = (zoneId) => {
+    for (const site of sites) {
+      const zone = site.zones?.find(z => z.id === zoneId);
+      if (zone) return zone.name;
+    }
+    return 'Unknown Zone';
+  };
+
+  // QR Code Logic
+  const handleShowQRCode = (area, zoneName, siteName) => {
+    // Construct the URL that leads to the PublicScanPage
+    // Using hash router format (#/public-scan/...)
+    const baseUrl = window.location.origin; 
+    const url = `${baseUrl}/#/public-scan/${area.id}`;
+    
+    setQrData({
+      areaId: area.id,
+      areaName: `${siteName} - ${zoneName} - ${area.name}`,
+      url: url
+    });
+    setQrModalOpen(true);
+  };
 
   return (
     <div className="flex gap-6 h-[calc(100vh-100px)]">
       {/* STICKY SIDEBAR */}
-      <div className="w-80 flex-shrink-0">
-        <div className="sticky top-6 space-y-4">
+      <div className="w-80 flex-shrink-0 overflow-y-auto">
+        <div className="space-y-4">
           {/* View Controls */}
           <div className="bg-white p-4 rounded-lg shadow-md">
             <h3 className="font-semibold text-gray-700 mb-3">View Controls</h3>
@@ -114,9 +239,10 @@ export default function Sites({ profile }) {
 
           {/* Add New Zone */}
           {selectedSite && (
-            <div className="bg-white p-4 rounded-lg shadow-md">
+            <div className="bg-white p-4 rounded-lg shadow-md border-l-4 border-blue-500">
               <h3 className="font-semibold text-gray-700 mb-3">
-                Add Zone to: {sites.find(s => s.id === selectedSite)?.name}
+                Add Zone to: <br/>
+                <span className="text-blue-600">{sites.find(s => s.id === selectedSite)?.name}</span>
               </h3>
               <form onSubmit={handleAddZone} className="space-y-3">
                 <input
@@ -124,7 +250,7 @@ export default function Sites({ profile }) {
                   value={newZone.name}
                   onChange={(e) => setNewZone({ ...newZone, name: e.target.value })}
                   placeholder="Zone Name"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-green-500 focus:border-green-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                   required
                 />
                 <button
@@ -140,9 +266,10 @@ export default function Sites({ profile }) {
 
           {/* Add New Area */}
           {selectedZone && (
-            <div className="bg-white p-4 rounded-lg shadow-md">
+            <div className="bg-white p-4 rounded-lg shadow-md border-l-4 border-purple-500">
               <h3 className="font-semibold text-gray-700 mb-3">
-                Add Area to: {getZoneName(selectedZone)}
+                Add Area to: <br/>
+                <span className="text-purple-600">{getZoneName(selectedZone)}</span>
               </h3>
               <form onSubmit={handleAddArea} className="space-y-3">
                 <input
@@ -150,27 +277,29 @@ export default function Sites({ profile }) {
                   value={newArea.name}
                   onChange={(e) => setNewArea({ ...newArea, name: e.target.value })}
                   placeholder="Area Name"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-green-500 focus:border-green-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500"
                   required
                 />
                 <select
                   value={newArea.area_type_id}
                   onChange={(e) => setNewArea({ ...newArea, area_type_id: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-green-500 focus:border-green-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500"
                 >
                   <option value="">Select Type</option>
                   {areaTypes.map(type => (
                     <option key={type.id} value={type.id}>{type.name}</option>
                   ))}
                 </select>
-                <input
-                  type="number"
-                  value={newArea.daily_cleaning_frequency}
-                  onChange={(e) => setNewArea({ ...newArea, daily_cleaning_frequency: parseInt(e.target.value) })}
-                  placeholder="Daily Cleaning Frequency"
-                  min="0"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-green-500 focus:border-green-500"
-                />
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-600 whitespace-nowrap">Daily Freq:</label>
+                  <input
+                    type="number"
+                    value={newArea.daily_cleaning_frequency}
+                    onChange={(e) => setNewArea({ ...newArea, daily_cleaning_frequency: parseInt(e.target.value) })}
+                    min="0"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500"
+                  />
+                </div>
                 <button
                   type="submit"
                   className="w-full bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 font-medium"
@@ -197,7 +326,7 @@ export default function Sites({ profile }) {
             <div className="space-y-4">
               {sites.map(site => (
                 <div key={site.id} className="border border-gray-200 rounded-lg overflow-hidden">
-                  {/* Site Header - Collapsible */}
+                  {/* Site Header */}
                   <div 
                     className="bg-gray-50 p-4 cursor-pointer hover:bg-gray-100 transition-colors"
                     onClick={() => toggleSite(site.id)}
@@ -217,7 +346,7 @@ export default function Sites({ profile }) {
                           setSelectedSite(site.id);
                           setSelectedZone(null);
                         }}
-                        className="bg-blue-500 text-white py-1 px-3 rounded-md hover:bg-blue-600 text-sm"
+                        className="bg-blue-500 text-white py-1 px-3 rounded-md hover:bg-blue-600 text-sm transition-colors"
                       >
                         <i className="fas fa-plus mr-1"></i>
                         Add Zone
@@ -225,13 +354,13 @@ export default function Sites({ profile }) {
                     </div>
                   </div>
 
-                  {/* Zones - Collapsible Content */}
+                  {/* Zones List */}
                   {!collapsedSites.has(site.id) && (
                     <div className="p-4 space-y-3">
                       {site.zones && site.zones.length > 0 ? (
                         site.zones.map(zone => (
                           <div key={zone.id} className="border border-gray-200 rounded-md overflow-hidden ml-6">
-                            {/* Zone Header - Collapsible */}
+                            {/* Zone Header */}
                             <div
                               className="bg-blue-50 p-3 cursor-pointer hover:bg-blue-100 transition-colors"
                               onClick={() => toggleZone(zone.id)}
@@ -251,7 +380,7 @@ export default function Sites({ profile }) {
                                     setSelectedZone(zone.id);
                                     setSelectedSite(site.id);
                                   }}
-                                  className="bg-purple-500 text-white py-1 px-3 rounded-md hover:bg-purple-600 text-sm"
+                                  className="bg-purple-500 text-white py-1 px-3 rounded-md hover:bg-purple-600 text-sm transition-colors"
                                 >
                                   <i className="fas fa-plus mr-1"></i>
                                   Add Area
@@ -259,24 +388,26 @@ export default function Sites({ profile }) {
                               </div>
                             </div>
 
-                            {/* Areas - Collapsible Content */}
+                            {/* Areas List */}
                             {!collapsedZones.has(zone.id) && (
                               <div className="p-3 bg-white">
                                 {zone.areas && zone.areas.length > 0 ? (
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                                     {zone.areas.map(area => (
                                       <div
                                         key={area.id}
-                                        className="border border-gray-200 rounded-md p-3 hover:shadow-md transition-shadow"
+                                        className="border border-gray-200 rounded-md p-3 hover:shadow-md transition-shadow bg-gray-50"
                                       >
                                         <div className="flex justify-between items-start mb-2">
-                                          <div className="flex items-center gap-2">
-                                            <i className="fas fa-door-open text-purple-600"></i>
-                                            <h5 className="font-medium text-gray-800">{area.name}</h5>
+                                          <div className="flex items-center gap-2 overflow-hidden">
+                                            <i className="fas fa-door-open text-purple-600 flex-shrink-0"></i>
+                                            <h5 className="font-medium text-gray-800 truncate" title={area.name}>
+                                              {area.name}
+                                            </h5>
                                           </div>
                                           <button
                                             onClick={() => handleShowQRCode(area, zone.name, site.name)}
-                                            className="text-gray-400 hover:text-gray-600"
+                                            className="text-gray-500 hover:text-gray-800 bg-white border border-gray-300 rounded p-1.5 transition-colors"
                                             title="View QR Code"
                                           >
                                             <i className="fas fa-qrcode"></i>
@@ -317,6 +448,51 @@ export default function Sites({ profile }) {
           )}
         </div>
       </div>
+
+      {/* QR Code Modal */}
+      {qrModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4" onClick={() => setQrModalOpen(false)}>
+            <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full text-center" onClick={e => e.stopPropagation()}>
+            <div className="no-print">
+                <h3 className="text-lg font-bold text-gray-800 mb-2">Area QR Code</h3>
+                <p className="text-sm text-gray-500 mb-4">{qrData.areaName}</p>
+            </div>
+            
+            {/* Printable Area - Designed to look like a sticker */}
+            <div className="print-area bg-white p-4 border-2 border-dashed border-gray-300 inline-block rounded-lg mb-4 w-full">
+                <div className="flex flex-col items-center">
+                    <p className="text-sm font-bold mb-2 uppercase tracking-wider text-gray-700">Scan to Clean / Report</p>
+                    <div className="bg-white p-2" style={{ height: "auto", margin: "0 auto", maxWidth: 200, width: "100%" }}>
+                        <QRCode 
+                            size={256}
+                            style={{ height: "auto", maxWidth: "100%", width: "100%" }}
+                            value={qrData.url}
+                            viewBox={`0 0 256 256`}
+                        />
+                    </div>
+                    <p className="text-xs mt-3 font-mono text-gray-500 break-words w-full">{qrData.areaName}</p>
+                    <p className="text-[10px] mt-1 text-gray-400">PristinePoint</p>
+                </div>
+            </div>
+            
+            <div className="flex gap-2 no-print">
+                <button 
+                onClick={() => window.print()} 
+                className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-md hover:bg-gray-200 transition-colors font-medium"
+                >
+                <i className="fas fa-print mr-2"></i> Print
+                </button>
+                <button 
+                onClick={() => setQrModalOpen(false)} 
+                className="flex-1 bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition-colors font-medium"
+                >
+                Close
+                </button>
+            </div>
+            </div>
+        </div>
+        )}
+
     </div>
   );
 }
