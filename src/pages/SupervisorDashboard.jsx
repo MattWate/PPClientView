@@ -262,6 +262,7 @@ const TaskManagementModal = ({
             
             {pendingTasks.length > 0 ? (
               <div className="space-y-4">
+                {/* Pending Tasks Review with Descriptions */}
                 <div className="bg-amber-50 border border-amber-100 rounded-md p-3">
                     <p className="text-sm font-semibold text-amber-800 mb-2">Pending Tasks Review:</p>
                     <ul className="space-y-2 max-h-48 overflow-y-auto">
@@ -274,7 +275,9 @@ const TaskManagementModal = ({
                                     </span>
                                 </div>
                                 {task.description && (
-                                    <p className="text-xs text-gray-500 mt-1 whitespace-pre-wrap">{task.description}</p>
+                                    <p className="text-xs text-gray-600 mt-1 pl-1 border-l-2 border-gray-200">
+                                        {task.description}
+                                    </p>
                                 )}
                             </li>
                         ))}
@@ -351,14 +354,16 @@ const TaskManagementModal = ({
 
 /** -------- main dashboard -------- */
 export default function SupervisorDashboard({ profile }) {
-  const [zones, setZones] = useState([]);
+  const [sites, setSites] = useState([]); // Level 1: Sites
   const [zoneCleanersMap, setZoneCleanersMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
   const [selectedAreaId, setSelectedAreaId] = useState(null);
+  const [selectedAreaZoneId, setSelectedAreaZoneId] = useState(null); // Need this for the modal context
   
   // Collapse State
+  const [collapsedSites, setCollapsedSites] = useState(new Set());
   const [collapsedZones, setCollapsedZones] = useState(new Set());
 
   const fetchData = useCallback(async () => {
@@ -371,10 +376,10 @@ export default function SupervisorDashboard({ profile }) {
       setLoading(true); 
       setError(null);
 
-      // Fetch zones assigned to this supervisor
+      // 1. Fetch zones assigned to this supervisor (Inner Join with Sites)
       const { data: assignedZones, error: zonesError } = await supabase
         .from('zone_assignments')
-        .select('zones!inner(*, sites(*))')
+        .select('zones!inner(id, name, site_id, sites(id, name))')
         .eq('user_id', profile.id);
       
       if (zonesError) throw zonesError;
@@ -383,13 +388,13 @@ export default function SupervisorDashboard({ profile }) {
       const zoneIds = supervisorZones.map(z => z.id);
       
       if (zoneIds.length === 0) { 
-        setZones([]); 
+        setSites([]); 
         setZoneCleanersMap({}); 
         setLoading(false); 
         return; 
       }
 
-      // Fetch areas in these zones
+      // 2. Fetch areas in these zones
       const { data: areasData, error: areasError } = await supabase
         .from('areas')
         .select('id, name, zone_id, company_id, daily_cleaning_frequency')
@@ -397,7 +402,7 @@ export default function SupervisorDashboard({ profile }) {
       
       if (areasError) throw areasError;
 
-      // Fetch tasks created today
+      // 3. Fetch tasks created today
       const start = startOfToday().toISOString();
       const end = startOfTomorrow().toISOString();
       const { data: tasksData, error: tasksError } = await supabase
@@ -409,7 +414,7 @@ export default function SupervisorDashboard({ profile }) {
       
       if (tasksError) throw tasksError;
 
-      // Build areas with task metadata
+      // 4. Process Data: Build areas with task metadata
       const areasWithMeta = (areasData || []).map(area => {
         const tasks = (tasksData || []).filter(t => t.area_id === area.id);
         const scheduledTodayCount = tasks.filter(t => t.task_type === 'scheduled').length;
@@ -418,7 +423,7 @@ export default function SupervisorDashboard({ profile }) {
         return { ...area, tasks, scheduledTodayCount, required, remaining };
       });
 
-      // Group areas by zone
+      // 5. Group Areas by Zone
       const areasByZone = areasWithMeta.reduce((acc, a) => { 
         (acc[a.zone_id] ||= []).push(a); 
         return acc; 
@@ -428,10 +433,26 @@ export default function SupervisorDashboard({ profile }) {
         ...zone, 
         areas: areasByZone[zone.id] || [] 
       }));
-      
-      setZones(zonesWithAreas);
 
-      // Fetch cleaners assigned to these zones
+      // 6. Group Zones by Site (New Hierarchy)
+      const sitesMap = {};
+      zonesWithAreas.forEach(zone => {
+        const siteId = zone.site_id;
+        const siteName = zone.sites?.name || 'Unknown Site';
+        
+        if (!sitesMap[siteId]) {
+            sitesMap[siteId] = {
+                id: siteId,
+                name: siteName,
+                zones: []
+            };
+        }
+        sitesMap[siteId].zones.push(zone);
+      });
+      
+      setSites(Object.values(sitesMap));
+
+      // 7. Fetch cleaners assigned to these zones
       const { data: za, error: zaErr } = await supabase
         .from('zone_assignments')
         .select('zone_id, user_id')
@@ -480,6 +501,15 @@ export default function SupervisorDashboard({ profile }) {
   }, [fetchData]);
 
   // Collapse Handlers
+  const toggleSite = (siteId) => {
+    setCollapsedSites(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(siteId)) newSet.delete(siteId);
+        else newSet.add(siteId);
+        return newSet;
+    });
+  };
+
   const toggleZone = (zoneId) => {
     setCollapsedZones(prev => {
       const newSet = new Set(prev);
@@ -489,16 +519,31 @@ export default function SupervisorDashboard({ profile }) {
     });
   };
 
-  const expandAll = () => setCollapsedZones(new Set());
+  const expandAll = () => {
+      setCollapsedSites(new Set());
+      setCollapsedZones(new Set());
+  };
   
   const collapseAll = () => {
-    const allZoneIds = zones.map(z => z.id);
+    const allSiteIds = sites.map(s => s.id);
+    const allZoneIds = sites.flatMap(s => s.zones.map(z => z.id));
+    setCollapsedSites(new Set(allSiteIds));
     setCollapsedZones(new Set(allZoneIds));
   };
 
-  const selectedArea = selectedAreaId 
-    ? zones.flatMap(z => z.areas || []).find(a => a.id === selectedAreaId) 
-    : null;
+  // Helper to find the area object from ID
+  const findAreaAndZone = (areaId) => {
+      if (!areaId) return null;
+      for (const site of sites) {
+          for (const zone of site.zones) {
+              const area = zone.areas?.find(a => a.id === areaId);
+              if (area) return { area, zone };
+          }
+      }
+      return null;
+  };
+  
+  const selectedContext = findAreaAndZone(selectedAreaId);
 
   if (loading) return (
     <div className="flex justify-center items-center p-12">
@@ -513,7 +558,7 @@ export default function SupervisorDashboard({ profile }) {
     </div>
   );
 
-  if (zones.length === 0) return (
+  if (sites.length === 0) return (
     <div className="p-12 text-center bg-white rounded-lg shadow-md">
       <i className="fas fa-info-circle text-4xl text-gray-400 mb-4"></i>
       <h3 className="text-xl font-semibold text-gray-700 mb-2">No Zones Assigned</h3>
@@ -536,12 +581,16 @@ export default function SupervisorDashboard({ profile }) {
               
               <div className="text-sm space-y-2 pt-4 border-t">
                 <div className="flex justify-between">
+                    <span className="text-gray-500">Sites:</span>
+                    <span className="font-medium">{sites.length}</span>
+                </div>
+                <div className="flex justify-between">
                     <span className="text-gray-500">Zones:</span>
-                    <span className="font-medium">{zones.length}</span>
+                    <span className="font-medium">{sites.reduce((acc, s) => acc + s.zones.length, 0)}</span>
                 </div>
                  <div className="flex justify-between">
                     <span className="text-gray-500">Total Areas:</span>
-                    <span className="font-medium">{zones.reduce((acc, z) => acc + (z.areas?.length || 0), 0)}</span>
+                    <span className="font-medium">{sites.reduce((acc, s) => acc + s.zones.reduce((zAcc, z) => zAcc + (z.areas?.length || 0), 0), 0)}</span>
                 </div>
               </div>
             </div>
@@ -572,109 +621,127 @@ export default function SupervisorDashboard({ profile }) {
 
         {/* MAIN SCROLLABLE CONTENT */}
         <div className="flex-1 overflow-y-auto pr-2">
-            {zones.map(zone => (
-            <div key={zone.id} className="bg-white rounded-lg shadow-md border border-gray-200 mb-6 overflow-hidden">
-                {/* Zone Header (Collapsible) */}
-                <div 
-                    onClick={() => toggleZone(zone.id)}
-                    className="p-4 bg-gray-50 border-b border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors flex justify-between items-center"
-                >
-                    <div>
-                        <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                            <i className={`fas fa-chevron-${collapsedZones.has(zone.id) ? 'right' : 'down'} text-gray-400 text-sm transition-transform`}></i>
-                            {zone.name}
+            {sites.map(site => (
+                <div key={site.id} className="bg-white rounded-lg shadow-md border border-gray-200 mb-6 overflow-hidden">
+                    {/* Level 1: Site Header */}
+                    <div 
+                        onClick={() => toggleSite(site.id)}
+                        className="p-4 bg-gray-100 border-b border-gray-200 cursor-pointer hover:bg-gray-200 transition-colors flex justify-between items-center"
+                    >
+                        <h3 className="text-xl font-bold text-gray-800 flex items-center gap-3">
+                            <i className={`fas fa-chevron-${collapsedSites.has(site.id) ? 'right' : 'down'} text-gray-500 text-sm transition-transform`}></i>
+                            <i className="fas fa-building text-indigo-600"></i>
+                            {site.name}
                         </h3>
-                        <p className="text-sm text-gray-500 ml-6">Site: {zone?.sites?.name || '—'}</p>
+                        <span className="text-xs bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full font-medium">
+                            {site.zones.length} Zones
+                        </span>
                     </div>
-                    <span className="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded-full">
-                        {zone.areas?.length || 0} Areas
-                    </span>
-                </div>
-                
-                {/* Zone Content */}
-                {!collapsedZones.has(zone.id) && (
-                <div className="p-4 space-y-4 bg-white">
-                {(zone.areas || []).length === 0 ? (
-                    <p className="text-gray-500 text-center py-4 italic">No areas defined in this zone.</p>
-                ) : (
-                    (zone.areas || []).map(area => {
-                    const pendingTasks = area.tasks.filter(t => t.status === 'pending');
-                    const hasPending = pendingTasks.length > 0;
-                    
-                    return (
-                        <div key={area.id} className={`border rounded-md p-4 transition-all ${hasPending ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-200 hover:border-blue-300'}`}>
-                        <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
-                            <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <p className="font-bold text-gray-800 text-lg">{area.name}</p>
-                                    {hasPending && (
-                                        <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
-                                            <i className="fas fa-exclamation-circle"></i>
-                                            {pendingTasks.length} Pending
-                                        </span>
-                                    )}
-                                </div>
-                                <div className="flex flex-wrap gap-2 text-xs">
-                                    <span className="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded">
-                                        Req: <b>{area.required}</b>
-                                    </span>
-                                    <span className={`px-2 py-1 rounded border ${area.remaining > 0 ? 'bg-orange-50 text-orange-700 border-orange-100' : 'bg-green-50 text-green-700 border-green-100'}`}>
-                                        Generated: <b>{area.scheduledTodayCount}</b>
-                                    </span>
-                                </div>
-                            </div>
-                            <button
-                            onClick={() => setSelectedAreaId(area.id)}
-                            className="bg-indigo-600 text-white py-2 px-4 text-sm rounded-md hover:bg-indigo-700 whitespace-nowrap shadow-sm flex items-center gap-2"
-                            >
-                            <i className="fas fa-tasks"></i>
-                            Manage Tasks
-                            </button>
-                        </div>
-                        
-                        {/* Task Mini-List */}
-                        <div className="mt-4 pt-3 border-t border-dashed border-gray-300">
-                            <h5 className="text-[10px] font-bold text-gray-400 uppercase mb-2 tracking-wider">Active Tasks Today</h5>
-                            {area.tasks.length > 0 ? (
-                            <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                {area.tasks.map(task => (
-                                <li key={task.id} className="text-sm text-gray-700 flex justify-between items-center bg-white p-2 rounded border border-gray-100 shadow-sm">
-                                    <span className="truncate mr-2 font-medium" title={task.title}>{task.title}</span>
-                                    <div className="flex items-center gap-1 flex-shrink-0">
-                                        <span className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-semibold ${
-                                            task.status === 'completed' ? 'bg-green-100 text-green-800' :
-                                            task.status === 'verified' ? 'bg-blue-100 text-blue-800' :
-                                            task.status === 'assigned' ? 'bg-indigo-100 text-indigo-800' :
-                                            'bg-gray-100 text-gray-600'
-                                        }`}>
-                                            {task.status}
+
+                    {/* Site Content (Zones List) */}
+                    {!collapsedSites.has(site.id) && (
+                        <div className="p-4 space-y-4 bg-gray-50">
+                            {site.zones.map(zone => (
+                                <div key={zone.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                                    {/* Level 2: Zone Header */}
+                                    <div 
+                                        onClick={() => toggleZone(zone.id)}
+                                        className="p-3 bg-white border-b border-gray-100 cursor-pointer hover:bg-blue-50 transition-colors flex justify-between items-center"
+                                    >
+                                        <h4 className="font-semibold text-gray-700 flex items-center gap-2 ml-2">
+                                            <i className={`fas fa-chevron-${collapsedZones.has(zone.id) ? 'right' : 'down'} text-gray-400 text-xs transition-transform`}></i>
+                                            {zone.name}
+                                        </h4>
+                                        <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                                            {zone.areas?.length || 0} Areas
                                         </span>
                                     </div>
-                                </li>
-                                ))}
-                            </ul>
-                            ) : (
-                            <p className="text-xs text-gray-400 italic">No tasks currently active.</p>
-                            )}
+
+                                    {/* Level 3: Areas List */}
+                                    {!collapsedZones.has(zone.id) && (
+                                        <div className="p-3 space-y-3 bg-white">
+                                            {(zone.areas || []).length === 0 ? (
+                                                <p className="text-gray-400 text-center py-2 text-sm italic">No areas defined.</p>
+                                            ) : (
+                                                zone.areas.map(area => {
+                                                    const pendingTasks = area.tasks.filter(t => t.status === 'pending');
+                                                    const hasPending = pendingTasks.length > 0;
+                                                    
+                                                    return (
+                                                        <div key={area.id} className={`border rounded-md p-3 transition-all ${hasPending ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-200 hover:border-blue-300'}`}>
+                                                            <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
+                                                                <div className="flex-1">
+                                                                    <div className="flex items-center gap-2 mb-2">
+                                                                        <p className="font-bold text-gray-800 text-md">{area.name}</p>
+                                                                        {hasPending && (
+                                                                            <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                                                                                <i className="fas fa-exclamation-circle"></i>
+                                                                                {pendingTasks.length}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="flex flex-wrap gap-2 text-[10px] uppercase tracking-wide">
+                                                                        <span className="bg-blue-50 text-blue-700 border border-blue-100 px-1.5 py-0.5 rounded">
+                                                                            Req: <b>{area.required}</b>
+                                                                        </span>
+                                                                        <span className={`px-1.5 py-0.5 rounded border ${area.remaining > 0 ? 'bg-orange-50 text-orange-700 border-orange-100' : 'bg-green-50 text-green-700 border-green-100'}`}>
+                                                                            Gen: <b>{area.scheduledTodayCount}</b>
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                                <button
+                                                                    onClick={() => setSelectedAreaId(area.id)}
+                                                                    className="bg-indigo-600 text-white py-1.5 px-3 text-xs rounded hover:bg-indigo-700 whitespace-nowrap shadow-sm flex items-center gap-1"
+                                                                >
+                                                                    <i className="fas fa-tasks"></i>
+                                                                    Manage
+                                                                </button>
+                                                            </div>
+                                                            
+                                                            {/* Task Mini-List */}
+                                                            <div className="mt-3 pt-2 border-t border-dashed border-gray-200">
+                                                                {area.tasks.length > 0 ? (
+                                                                    <ul className="grid grid-cols-1 gap-1.5">
+                                                                        {area.tasks.map(task => (
+                                                                            <li key={task.id} className="text-xs text-gray-700 flex justify-between items-center bg-gray-50 p-1.5 rounded border border-gray-100">
+                                                                                <span className="truncate mr-2 font-medium" title={task.title}>{task.title}</span>
+                                                                                <span className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-semibold ${
+                                                                                    task.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                                                                    task.status === 'verified' ? 'bg-blue-100 text-blue-800' :
+                                                                                    task.status === 'assigned' ? 'bg-indigo-100 text-indigo-800' :
+                                                                                    'bg-gray-200 text-gray-600'
+                                                                                }`}>
+                                                                                    {task.status}
+                                                                                </span>
+                                                                            </li>
+                                                                        ))}
+                                                                    </ul>
+                                                                ) : (
+                                                                    <p className="text-[10px] text-gray-400 italic">No tasks active today.</p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
                         </div>
-                        </div>
-                    );
-                    })
-                )}
+                    )}
                 </div>
-                )}
-            </div>
             ))}
         </div>
       </div>
       
       <TaskManagementModal
         profile={profile}
-        area={selectedArea ? { ...selectedArea, zones: zones.find(z => z.id === selectedArea.zone_id) } : null}
-        isOpen={!!selectedArea}
+        area={selectedContext ? { ...selectedContext.area, zones: selectedContext.zone } : null}
+        isOpen={!!selectedAreaId}
         onClose={() => setSelectedAreaId(null)}
         onUpdate={fetchData}
-        allCleaners={selectedArea ? (zoneCleanersMap[selectedArea.zone_id] || []) : []}
+        allCleaners={selectedContext ? (zoneCleanersMap[selectedContext.zone.id] || []) : []}
       />
     </>
   );
